@@ -5,6 +5,7 @@ import app.system.FormManager;
 import com.formdev.flatlaf.FlatClientProperties;
 import com.formdev.flatlaf.extras.FlatSVGIcon;
 import java.awt.BorderLayout;
+import java.awt.Insets;
 import java.net.URL;
 import javax.swing.ImageIcon;
 import javax.swing.JButton;
@@ -19,6 +20,7 @@ import raven.modal.Drawer;
 public class MainFrame extends JFrame {
     
     private FormManager formManager;
+    private JPanel body;
 
     public MainFrame() {
         init();
@@ -47,7 +49,6 @@ public class MainFrame extends JFrame {
         // Toolbar
         JToolBar toolbar = new JToolBar();
         
-        // CORRECCIÓN: Usamos Drawer.showDrawer() directamente
         JButton cmdMenu = new JButton();
         cmdMenu.setIcon(new FlatSVGIcon("icons/menu.svg")); 
         cmdMenu.addActionListener(e -> Drawer.showDrawer());
@@ -56,13 +57,13 @@ public class MainFrame extends JFrame {
         contentPane.add(toolbar, BorderLayout.NORTH);
 
         // Panel central (Body)
-        JPanel body = new JPanel(new BorderLayout());
+        body = new JPanel(new BorderLayout());
         contentPane.add(body, BorderLayout.CENTER);
 
         // 1. Instanciar FormManager
         formManager = new FormManager(body);
 
-        // 2. Instalar Drawer
+        // 2. Instalar Drawer - Usamos el layout responsivo por defecto
         Drawer.installDrawer(this, new MyDrawerBuilder(formManager));
         
         // Vista inicial

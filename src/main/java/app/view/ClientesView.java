@@ -128,91 +128,141 @@ public class ClientesView extends JPanel {
     }
 
     private void showClienteForm(Cliente clienteEditar) {
-        SwingUtilities.invokeLater(() -> {
-            try {
-                ClienteForm form = new ClienteForm();
-                if (clienteEditar != null) form.loadData(clienteEditar);
+        // Verificar que tenemos una ventana padre válida
+        Component parentComponent = SwingUtilities.getRoot(this);
+        if (parentComponent == null || !(parentComponent instanceof Window)) {
+            Toast.show(this, Toast.Type.ERROR, "Error: No se puede mostrar el formulario");
+            return;
+        }
 
-                SimpleModalBorder.Option[] options = {
-                    new SimpleModalBorder.Option("Guardar", SimpleModalBorder.YES_OPTION),
-                    new SimpleModalBorder.Option("Cancelar", SimpleModalBorder.CANCEL_OPTION)
-                };
+        // Referencia final para usar en el lambda
+        final Component owner = parentComponent;
 
-                Window window = SwingUtilities.getWindowAncestor(this);
-                if (window == null) return; 
+        // Crear el formulario
+        ClienteForm form = new ClienteForm();
+        if (clienteEditar != null) {
+            form.loadData(clienteEditar);
+        }
 
-                ModalDialog.showModal(window, new SimpleModalBorder(
-                        form, 
-                        (clienteEditar == null ? "Nuevo Cliente" : "Editar Cliente"), 
-                        options,
-                        (controller, action) -> {
-                            if (action == SimpleModalBorder.YES_OPTION) {
-                                try {
-                                    Cliente c = form.getData();
-                                    if (clienteEditar == null) {
-                                        repository.create(c);
-                                        Toast.show(window, Toast.Type.SUCCESS, "Cliente registrado");
-                                    } else {
-                                        c.setId(clienteEditar.getId());
-                                        repository.update(c);
-                                        Toast.show(window, Toast.Type.SUCCESS, "Datos actualizados");
-                                    }
-                                    loadData();
-                                    controller.close();
-                                } catch (Exception ex) {
-                                    Toast.show(window, Toast.Type.WARNING, ex.getMessage());
-                                }
-                            } else {
-                                controller.close();
-                            }
+        // Crear el panel contenedor del formulario
+        JPanel formPanel = new JPanel(new MigLayout("fill, insets 0", "[grow]", "[grow]"));
+        formPanel.add(form, "grow");
+
+        // Configurar opciones del modal
+        SimpleModalBorder.Option[] options = {
+            new SimpleModalBorder.Option("Guardar", SimpleModalBorder.YES_OPTION),
+            new SimpleModalBorder.Option("Cancelar", SimpleModalBorder.CANCEL_OPTION)
+        };
+
+        // Crear el border del modal
+        SimpleModalBorder modalBorder = new SimpleModalBorder(
+            formPanel,
+            (clienteEditar == null ? "Nuevo Cliente" : "Editar Cliente"),
+            options,
+            (controller, action) -> {
+                if (action == SimpleModalBorder.YES_OPTION) {
+                    // Intentar guardar
+                    try {
+                        Cliente c = form.getData();
+                        
+                        if (clienteEditar == null) {
+                            // Crear nuevo
+                            repository.create(c);
+                            Toast.show(owner, Toast.Type.SUCCESS, "Cliente registrado exitosamente");
+                        } else {
+                            // Actualizar existente
+                            c.setId(clienteEditar.getId());
+                            repository.update(c);
+                            Toast.show(owner, Toast.Type.SUCCESS, "Cliente actualizado exitosamente");
                         }
-                ));
-            } catch (Exception ex) {
-                ex.printStackTrace();
+                        
+                        // Recargar datos
+                        loadData();
+                        
+                        // Cerrar el modal
+                        controller.close();
+                        
+                    } catch (Exception ex) {
+                        // Mostrar error pero NO cerrar el modal
+                        Toast.show(owner, Toast.Type.WARNING, ex.getMessage());
+                    }
+                } else {
+                    // Cancelar
+                    controller.close();
+                }
             }
-        });
+        );
+
+        // Mostrar el modal
+        ModalDialog.showModal(owner, modalBorder);
     }
 
     private void deleteSelected() {
         int row = table.getSelectedRow();
         if (row == -1) {
-            Toast.show(this, Toast.Type.INFO, "Selecciona un cliente");
+            Toast.show(this, Toast.Type.INFO, "Selecciona un cliente de la tabla");
             return;
         }
+        
         int id = (int) table.getValueAt(row, 0);
         String nombre = (String) table.getValueAt(row, 2);
         
-        SwingUtilities.invokeLater(() -> {
-            Window window = SwingUtilities.getWindowAncestor(this);
-            if (window == null) return;
+        // Obtener ventana padre
+        Component parentComponent = SwingUtilities.getRoot(this);
+        if (parentComponent == null || !(parentComponent instanceof Window)) {
+            Toast.show(this, Toast.Type.ERROR, "Error al mostrar diálogo de confirmación");
+            return;
+        }
 
-            JLabel msgLabel = new JLabel("<html>¿Estás seguro de eliminar a <b>" + nombre + "</b>?</html>");
-            ModalDialog.showModal(window, new SimpleModalBorder(
-                    msgLabel, "Confirmar Eliminación", SimpleModalBorder.YES_NO_OPTION,
-                    (controller, action) -> {
-                        if (action == SimpleModalBorder.YES_OPTION) {
-                            try {
-                                repository.delete(id);
-                                Toast.show(window, Toast.Type.SUCCESS, "Cliente eliminado");
-                                loadData();
-                            } catch (Exception e) {
-                                Toast.show(window, Toast.Type.ERROR, "Error: " + e.getMessage());
-                            }
-                        }
-                        controller.close();
+        // Referencia final para usar en el lambda
+        final Component owner = parentComponent;
+
+        // Crear mensaje de confirmación
+        JPanel msgPanel = new JPanel(new MigLayout("fill, insets 20", "[center]", "[]10[]"));
+        JLabel icon = new JLabel(UIManager.getIcon("OptionPane.warningIcon"));
+        JLabel msg = new JLabel("<html><center>¿Estás seguro de eliminar a<br><b>" + nombre + "</b>?<br><br>Esta acción no se puede deshacer.</center></html>");
+        msg.setHorizontalAlignment(SwingConstants.CENTER);
+        msgPanel.add(icon, "wrap");
+        msgPanel.add(msg, "grow");
+        
+        SimpleModalBorder modalBorder = new SimpleModalBorder(
+            msgPanel,
+            "Confirmar Eliminación",
+            SimpleModalBorder.YES_NO_OPTION,
+            (controller, action) -> {
+                if (action == SimpleModalBorder.YES_OPTION) {
+                    try {
+                        repository.delete(id);
+                        Toast.show(owner, Toast.Type.SUCCESS, "Cliente eliminado correctamente");
+                        loadData();
+                    } catch (Exception e) {
+                        Toast.show(owner, Toast.Type.ERROR, "Error al eliminar: " + e.getMessage());
                     }
-            ));
-        });
+                }
+                controller.close();
+            }
+        );
+        
+        ModalDialog.showModal(owner, modalBorder);
     }
     
     private void editSelected() {
         int row = table.getSelectedRow();
         if (row == -1) {
-            Toast.show(this, Toast.Type.INFO, "Selecciona un cliente");
+            Toast.show(this, Toast.Type.INFO, "Selecciona un cliente de la tabla");
             return;
         }
+        
         int id = (int) table.getValueAt(row, 0); 
-        Cliente seleccionado = listaClientesCache.stream().filter(c -> c.getId() == id).findFirst().orElse(null);
-        if (seleccionado != null) showClienteForm(seleccionado);
+        Cliente seleccionado = listaClientesCache.stream()
+                .filter(c -> c.getId() == id)
+                .findFirst()
+                .orElse(null);
+        
+        if (seleccionado != null) {
+            showClienteForm(seleccionado);
+        } else {
+            Toast.show(this, Toast.Type.ERROR, "Error: No se encontró el cliente seleccionado");
+        }
     }
 }
