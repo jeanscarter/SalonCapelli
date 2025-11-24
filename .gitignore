@@ -1,0 +1,21 @@
+# Archivos compilados y de distribución
+target/
+dist/
+*.class
+*.jar
+*.war
+
+# NetBeans (Archivos de configuración de usuario)
+nbproject/private/
+build/
+nbbuild/
+nbdist/
+nbactions.xml
+nb-configuration.xml
+
+# Maven
+dependency-reduced-pom.xml
+
+# Logs y temporales
+*.log
+*.tmp
