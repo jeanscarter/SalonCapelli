@@ -3,6 +3,7 @@ package app.main;
 import app.menu.MyDrawerBuilder;
 import app.system.FormManager;
 import com.formdev.flatlaf.FlatClientProperties;
+import com.formdev.flatlaf.extras.FlatSVGIcon;
 import java.awt.BorderLayout;
 import java.net.URL;
 import javax.swing.ImageIcon;
@@ -45,8 +46,12 @@ public class MainFrame extends JFrame {
 
         // Toolbar
         JToolBar toolbar = new JToolBar();
-        JButton cmdMenu = new JButton("Menú");
-        cmdMenu.addActionListener(e -> Drawer.showDrawer()); 
+        
+        // CORRECCIÓN: Usamos Drawer.showDrawer() directamente
+        JButton cmdMenu = new JButton();
+        cmdMenu.setIcon(new FlatSVGIcon("icons/menu.svg")); 
+        cmdMenu.addActionListener(e -> Drawer.showDrawer());
+        
         toolbar.add(cmdMenu);
         contentPane.add(toolbar, BorderLayout.NORTH);
 
@@ -54,10 +59,10 @@ public class MainFrame extends JFrame {
         JPanel body = new JPanel(new BorderLayout());
         contentPane.add(body, BorderLayout.CENTER);
 
-        // 1. Instanciar FormManager (Estado Global controlado)
+        // 1. Instanciar FormManager
         formManager = new FormManager(body);
 
-        // 2. Instalar Drawer inyectando el FormManager (Inyección de Dependencias)
+        // 2. Instalar Drawer
         Drawer.installDrawer(this, new MyDrawerBuilder(formManager));
         
         // Vista inicial
