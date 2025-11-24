@@ -19,3 +19,4 @@ dependency-reduced-pom.xml
 # Logs y temporales
 *.log
 *.tmp
+/salon_capelli.db
