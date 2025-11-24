@@ -53,7 +53,6 @@ public class ClientesView extends JPanel {
         });
         toolbar.add(txtSearch);
 
-        // Botones solo con Iconos (requiere tener add.svg, edit.svg, delete.svg en resources/icons/)
         JButton cmdAdd = createToolButton("icons/add.svg", "Nuevo Cliente", "$Component.accentColor", "#fff");
         cmdAdd.addActionListener(e -> showClienteForm(null));
         toolbar.add(cmdAdd);
@@ -92,7 +91,7 @@ public class ClientesView extends JPanel {
         scroll.putClientProperty(FlatClientProperties.STYLE, "border:0,0,0,0");
         add(scroll, "grow");
     }
-
+   
     private JButton createToolButton(String iconPath, String tooltip, String bgColor, String fgColor) {
         JButton btn = new JButton();
         btn.setIcon(new FlatSVGIcon(iconPath, 20, 20));
@@ -117,7 +116,6 @@ public class ClientesView extends JPanel {
     private void filterData(String query) {
         tableModel.setRowCount(0); 
         if (listaClientesCache == null) return;
-
         String q = query.toLowerCase();
         for (Cliente c : listaClientesCache) {
             if (c.getNombreCompleto().toLowerCase().contains(q) || 
@@ -130,25 +128,18 @@ public class ClientesView extends JPanel {
     }
 
     private void showClienteForm(Cliente clienteEditar) {
-        // Ejecutar en el hilo de eventos de Swing con invokeLater para evitar conflictos de foco
         SwingUtilities.invokeLater(() -> {
             try {
                 ClienteForm form = new ClienteForm();
-                if (clienteEditar != null) {
-                    form.loadData(clienteEditar);
-                }
+                if (clienteEditar != null) form.loadData(clienteEditar);
 
                 SimpleModalBorder.Option[] options = {
                     new SimpleModalBorder.Option("Guardar", SimpleModalBorder.YES_OPTION),
                     new SimpleModalBorder.Option("Cancelar", SimpleModalBorder.CANCEL_OPTION)
                 };
 
-                // Obtener la ventana principal asegurada
                 Window window = SwingUtilities.getWindowAncestor(this);
-                if (window == null) {
-                    System.err.println("Error: No se encontró la ventana padre para el modal.");
-                    return; 
-                }
+                if (window == null) return; 
 
                 ModalDialog.showModal(window, new SimpleModalBorder(
                         form, 
@@ -178,7 +169,6 @@ public class ClientesView extends JPanel {
                 ));
             } catch (Exception ex) {
                 ex.printStackTrace();
-                Toast.show(this, Toast.Type.ERROR, "Error al abrir formulario: " + ex.getMessage());
             }
         });
     }
@@ -189,7 +179,6 @@ public class ClientesView extends JPanel {
             Toast.show(this, Toast.Type.INFO, "Selecciona un cliente");
             return;
         }
-        
         int id = (int) table.getValueAt(row, 0);
         String nombre = (String) table.getValueAt(row, 2);
         
@@ -197,12 +186,9 @@ public class ClientesView extends JPanel {
             Window window = SwingUtilities.getWindowAncestor(this);
             if (window == null) return;
 
-            JLabel msgLabel = new JLabel("<html>¿Estás seguro de eliminar a <b>" + nombre + "</b>?<br>Esta acción no se puede deshacer.</html>");
-            
+            JLabel msgLabel = new JLabel("<html>¿Estás seguro de eliminar a <b>" + nombre + "</b>?</html>");
             ModalDialog.showModal(window, new SimpleModalBorder(
-                    msgLabel, 
-                    "Confirmar Eliminación",
-                    SimpleModalBorder.YES_NO_OPTION,
+                    msgLabel, "Confirmar Eliminación", SimpleModalBorder.YES_NO_OPTION,
                     (controller, action) -> {
                         if (action == SimpleModalBorder.YES_OPTION) {
                             try {
@@ -212,10 +198,8 @@ public class ClientesView extends JPanel {
                             } catch (Exception e) {
                                 Toast.show(window, Toast.Type.ERROR, "Error: " + e.getMessage());
                             }
-                            controller.close();
-                        } else {
-                            controller.close();
                         }
+                        controller.close();
                     }
             ));
         });
@@ -228,8 +212,7 @@ public class ClientesView extends JPanel {
             return;
         }
         int id = (int) table.getValueAt(row, 0); 
-        Cliente seleccionado = listaClientesCache.stream()
-                .filter(c -> c.getId() == id).findFirst().orElse(null);
+        Cliente seleccionado = listaClientesCache.stream().filter(c -> c.getId() == id).findFirst().orElse(null);
         if (seleccionado != null) showClienteForm(seleccionado);
     }
 }

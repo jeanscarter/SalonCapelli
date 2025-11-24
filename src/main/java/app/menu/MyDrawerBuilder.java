@@ -93,14 +93,6 @@ public class MyDrawerBuilder extends SimpleDrawerBuilder {
                 } else {
                     formManager.showToast("Módulo no implementado: " + itemTitle);
                 }
-                
-                // LÓGICA: Mantener menú abierto si es "Clientes"
-                if ("Clientes".equals(itemTitle)) {
-                    SwingUtilities.invokeLater(() -> {
-                        // Forzamos que se muestre (o permanezca) el Drawer
-                        Drawer.showDrawer();
-                    });
-                }
             }
         });
 
