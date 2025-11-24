@@ -128,23 +128,13 @@ public class ClientesView extends JPanel {
     }
 
     private void showClienteForm(Cliente clienteEditar) {
-        // Verificar que tenemos una ventana padre válida
-        Component parentComponent = SwingUtilities.getRoot(this);
-        if (parentComponent == null || !(parentComponent instanceof Window)) {
-            Toast.show(this, Toast.Type.ERROR, "Error: No se puede mostrar el formulario");
-            return;
-        }
-
-        // Referencia final para usar en el lambda
-        final Component owner = parentComponent;
-
         // Crear el formulario
         ClienteForm form = new ClienteForm();
         if (clienteEditar != null) {
             form.loadData(clienteEditar);
         }
 
-        // Crear el panel contenedor del formulario
+        // Crear el panel contenedor
         JPanel formPanel = new JPanel(new MigLayout("fill, insets 0", "[grow]", "[grow]"));
         formPanel.add(form, "grow");
 
@@ -154,47 +144,40 @@ public class ClientesView extends JPanel {
             new SimpleModalBorder.Option("Cancelar", SimpleModalBorder.CANCEL_OPTION)
         };
 
-        // Crear el border del modal
+        // Crear el modal border
         SimpleModalBorder modalBorder = new SimpleModalBorder(
             formPanel,
             (clienteEditar == null ? "Nuevo Cliente" : "Editar Cliente"),
             options,
             (controller, action) -> {
                 if (action == SimpleModalBorder.YES_OPTION) {
-                    // Intentar guardar
                     try {
                         Cliente c = form.getData();
                         
                         if (clienteEditar == null) {
-                            // Crear nuevo
                             repository.create(c);
-                            Toast.show(owner, Toast.Type.SUCCESS, "Cliente registrado exitosamente");
+                            Toast.show(this, Toast.Type.SUCCESS, "Cliente registrado exitosamente");
                         } else {
-                            // Actualizar existente
                             c.setId(clienteEditar.getId());
                             repository.update(c);
-                            Toast.show(owner, Toast.Type.SUCCESS, "Cliente actualizado exitosamente");
+                            Toast.show(this, Toast.Type.SUCCESS, "Cliente actualizado exitosamente");
                         }
                         
-                        // Recargar datos
                         loadData();
-                        
-                        // Cerrar el modal
                         controller.close();
                         
                     } catch (Exception ex) {
-                        // Mostrar error pero NO cerrar el modal
-                        Toast.show(owner, Toast.Type.WARNING, ex.getMessage());
+                        Toast.show(this, Toast.Type.WARNING, ex.getMessage());
+                        // NO cerramos el modal para que el usuario pueda corregir
                     }
                 } else {
-                    // Cancelar
                     controller.close();
                 }
             }
         );
 
-        // Mostrar el modal
-        ModalDialog.showModal(owner, modalBorder);
+        // Mostrar el modal - Esta es la forma correcta para la versión 2.6.0-SNAPSHOT
+        ModalDialog.showModal(this, modalBorder);
     }
 
     private void deleteSelected() {
@@ -206,16 +189,6 @@ public class ClientesView extends JPanel {
         
         int id = (int) table.getValueAt(row, 0);
         String nombre = (String) table.getValueAt(row, 2);
-        
-        // Obtener ventana padre
-        Component parentComponent = SwingUtilities.getRoot(this);
-        if (parentComponent == null || !(parentComponent instanceof Window)) {
-            Toast.show(this, Toast.Type.ERROR, "Error al mostrar diálogo de confirmación");
-            return;
-        }
-
-        // Referencia final para usar en el lambda
-        final Component owner = parentComponent;
 
         // Crear mensaje de confirmación
         JPanel msgPanel = new JPanel(new MigLayout("fill, insets 20", "[center]", "[]10[]"));
@@ -233,17 +206,17 @@ public class ClientesView extends JPanel {
                 if (action == SimpleModalBorder.YES_OPTION) {
                     try {
                         repository.delete(id);
-                        Toast.show(owner, Toast.Type.SUCCESS, "Cliente eliminado correctamente");
+                        Toast.show(this, Toast.Type.SUCCESS, "Cliente eliminado correctamente");
                         loadData();
                     } catch (Exception e) {
-                        Toast.show(owner, Toast.Type.ERROR, "Error al eliminar: " + e.getMessage());
+                        Toast.show(this, Toast.Type.ERROR, "Error al eliminar: " + e.getMessage());
                     }
                 }
                 controller.close();
             }
         );
         
-        ModalDialog.showModal(owner, modalBorder);
+        ModalDialog.showModal(this, modalBorder);
     }
     
     private void editSelected() {

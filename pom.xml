@@ -17,8 +17,10 @@
     </properties>
 
     <repositories>
+        <!-- Repositorio para versiones SNAPSHOT -->
         <repository>
             <id>central-portal-snapshots</id>
+            <name>Central Portal Snapshots</name>
             <url>https://central.sonatype.com/repository/maven-snapshots/</url>
             <releases>
                 <enabled>false</enabled>
@@ -60,6 +62,7 @@
             <artifactId>miglayout-swing</artifactId>
             <version>5.3</version>
         </dependency>
+        <!-- Modal Dialog - versión SNAPSHOT correcta -->
         <dependency>
             <groupId>io.github.dj-raven</groupId>
             <artifactId>modal-dialog</artifactId>
