@@ -9,6 +9,7 @@ import app.model.Cliente;
 import app.model.TipoCabello;
 import app.repository.ClienteRepository;
 import app.repository.ClienteRepositorySQLite;
+import app.util.ToastNotification;
 import app.util.validator.ValidadorVenezolano;
 import com.formdev.flatlaf.FlatClientProperties;
 import com.formdev.flatlaf.extras.FlatSVGIcon;
@@ -255,59 +256,89 @@ public class ClienteModal extends Modal {
     /**
      * Guarda el cliente con validación y manejo de excepciones específicas
      */
-    private void guardarCliente() {
-        logger.info("Iniciando proceso de guardado de cliente");
+   private void guardarCliente() {
+    logger.info("Iniciando proceso de guardado de cliente");
+    
+    btnGuardar.setEnabled(false);
+    
+    try {
+        Cliente cliente = buildAndValidateCliente();
         
-        // Deshabilitar botón para evitar doble clic
-        btnGuardar.setEnabled(false);
-        
-        try {
-            // Paso 1: Validar y crear objeto Cliente
-            Cliente cliente = buildAndValidateCliente();
+        if (clienteActual == null) {
+            logger.debug("Creando nuevo cliente");
+            repository.create(cliente);
+            logger.info("✓ Cliente creado: {} - {}", cliente.getCedula(), cliente.getNombreCompleto());
             
-            // Paso 2: Guardar en BD
-            if (clienteActual == null) {
-                logger.debug("Creando nuevo cliente");
-                repository.create(cliente);
-                logger.info("✓ Cliente creado: {} - {}", cliente.getCedula(), cliente.getNombreCompleto());
-            } else {
-                logger.debug("Actualizando cliente ID: {}", clienteActual.getId());
-                repository.update(cliente);
-                logger.info("✓ Cliente actualizado: {} - {}", cliente.getCedula(), cliente.getNombreCompleto());
-            }
+            // ✅ Toast de éxito
+            ToastNotification.showSuccess(
+                this, 
+                "Cliente Registrado", 
+                "El cliente ha sido registrado exitosamente"
+            );
+        } else {
+            logger.debug("Actualizando cliente ID: {}", clienteActual.getId());
+            repository.update(cliente);
+            logger.info("✓ Cliente actualizado: {} - {}", cliente.getCedula(), cliente.getNombreCompleto());
             
-            // Paso 3: Notificar éxito
-            if (callback != null) {
-                callback.onSuccess(cliente);
-            }
-            
-            // Paso 4: Cerrar modal
-            getController().closeModal();
-            
-        } catch (ValidationException e) {
-            logger.warn("Errores de validación: {}", e.getMessage());
-            showValidationErrors(e);
-            
-        } catch (ClienteDuplicadoException e) {
-            logger.warn("Cliente duplicado: {}", e.getCedula());
-            showError("Ya existe un cliente con la cédula: " + e.getCedula());
-            
-        } catch (ClienteNotFoundException e) {
-            logger.error("Cliente no encontrado: {}", e.getMessage());
-            showError("No se encontró el cliente a actualizar. Recargue la lista.");
-            
-        } catch (ClienteException e) {
-            logger.error("Error de negocio: {}", e.getMessage(), e);
-            showError("Error al procesar el cliente: " + e.getMessage());
-            
-        } catch (Exception e) {
-            logger.error("Error inesperado guardando cliente", e);
-            showError("Error inesperado: " + e.getMessage());
-            
-        } finally {
-            btnGuardar.setEnabled(true);
+            // ✅ Toast de éxito
+            ToastNotification.showSuccess(
+                this,
+                "Cliente Actualizado",
+                "Los datos del cliente se han actualizado correctamente"
+            );
         }
+        
+        if (callback != null) {
+            callback.onSuccess(cliente);
+        }
+        
+        getController().closeModal();
+        
+    } catch (ValidationException e) {
+        logger.warn("Errores de validación: {}", e.getMessage());
+        // ✅ Toast de validación con múltiples errores
+        ToastNotification.showValidationErrors(this, e);
+        
+    } catch (ClienteDuplicadoException e) {
+        logger.warn("Cliente duplicado: {}", e.getCedula());
+        // ✅ Toast de error
+        ToastNotification.showError(
+            this,
+            "Cliente Duplicado",
+            "Ya existe un cliente registrado con la cédula: " + e.getCedula()
+        );
+        
+    } catch (ClienteNotFoundException e) {
+        logger.error("Cliente no encontrado: {}", e.getMessage());
+        // ✅ Toast de error crítico
+        ToastNotification.showError(
+            this,
+            "Error Crítico",
+            "No se encontró el cliente a actualizar. Por favor, recargue la lista."
+        );
+        
+    } catch (ClienteException e) {
+        logger.error("Error de negocio: {}", e.getMessage(), e);
+        // ✅ Toast de error
+        ToastNotification.showError(
+            this,
+            "Error al Guardar",
+            "Ocurrió un error al procesar el cliente: " + e.getMessage()
+        );
+        
+    } catch (Exception e) {
+        logger.error("Error inesperado guardando cliente", e);
+        // ✅ Toast de error genérico
+        ToastNotification.showError(
+            this,
+            "Error Inesperado",
+            "Ha ocurrido un error inesperado. Por favor, intente nuevamente."
+        );
+        
+    } finally {
+        btnGuardar.setEnabled(true);
     }
+}
     
     /**
      * Construye y valida el objeto Cliente
@@ -350,25 +381,7 @@ public class ClienteModal extends Modal {
         return cliente;
     }
     
-    /**
-     * Muestra errores de validación de forma amigable
-     */
-    private void showValidationErrors(ValidationException e) {
-        StringBuilder message = new StringBuilder();
-        message.append("Por favor corrija los siguientes errores:\n\n");
         
-        for (ValidationException.ValidationError error : e.getErrors()) {
-            message.append("• ").append(error.getMessage()).append("\n");
-        }
-        
-        JOptionPane.showMessageDialog(
-            this,
-            message.toString(),
-            "Errores de Validación",
-            JOptionPane.WARNING_MESSAGE
-        );
-    }
-    
     private void setDateField(JFormattedTextField field, LocalDate date) {
         if (date != null) {
             field.setText(date.format(dateFormatter));
@@ -387,9 +400,6 @@ public class ClienteModal extends Modal {
         }
     }
     
-    private void showError(String message) {
-        JOptionPane.showMessageDialog(this, message, "Error", JOptionPane.ERROR_MESSAGE);
-    }
     
     /**
      * Interfaz callback para notificar eventos

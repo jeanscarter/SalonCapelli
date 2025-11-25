@@ -24,31 +24,24 @@ public class Application {
     private static final String APP_VERSION = "1.0.0";
     
     public static void main(String[] args) {
-        logger.info("========================================");
-        logger.info("Iniciando {} v{}", APP_NAME, APP_VERSION);
-        logger.info("========================================");
+    logger.info("========================================");
+    logger.info("Iniciando {} v{}", APP_NAME, APP_VERSION);
+    logger.info("========================================");
+    
+    try {
+        configureLookAndFeel();
+        initializeDatabase();
+        registerShutdownHooks();
+        launchGUI();
         
-        try {
-            // Paso 1: Configurar Look & Feel
-            configureLookAndFeel();
-            
-            // Paso 2: Inicializar Base de Datos
-            initializeDatabase();
-            
-            // Paso 3: Registrar Shutdown Hooks
-            registerShutdownHooks();
-            
-            // Paso 4: Lanzar Interfaz Gráfica
-            launchGUI();
-            
-            logger.info("✓ Aplicación iniciada exitosamente");
-            
-        } catch (Exception e) {
-            logger.error("ERROR CRÍTICO: No se pudo iniciar la aplicación", e);
-            showFatalErrorDialog(e);
-            System.exit(1);
-        }
+        logger.info("✓ Aplicación iniciada exitosamente");
+        
+    } catch (Exception e) {
+        logger.error("ERROR CRÍTICO: No se pudo iniciar la aplicación", e);
+        showFatalErrorDialog(e);
+        System.exit(1);
     }
+}
 
     /**
      * Configura el Look & Feel de la aplicación
@@ -146,19 +139,19 @@ public class Application {
      * Muestra un diálogo de error crítico y termina la aplicación
      */
     private static void showFatalErrorDialog(Exception e) {
-        String message = String.format(
-            "Error crítico al iniciar la aplicación:\n\n%s\n\n" +
-            "La aplicación se cerrará. Revise los logs para más detalles.",
-            e.getMessage()
-        );
-        
-        JOptionPane.showMessageDialog(
-            null,
-            message,
-            "Error Crítico - " + APP_NAME,
-            JOptionPane.ERROR_MESSAGE
-        );
-    }
+    String message = String.format(
+        "Error crítico al iniciar la aplicación:\n\n%s\n\n" +
+        "La aplicación se cerrará. Revise los logs para más detalles.",
+        e.getMessage()
+    );
+    
+    JOptionPane.showMessageDialog(
+        null,
+        message,
+        "Error Crítico - " + APP_NAME,
+        JOptionPane.ERROR_MESSAGE
+    );
+}
     
     /**
      * Obtiene la versión de la aplicación

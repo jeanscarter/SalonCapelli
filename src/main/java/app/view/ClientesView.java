@@ -8,13 +8,13 @@ import app.option.ModalOption;
 import app.repository.ClienteRepository;
 import app.repository.ClienteRepositorySQLite;
 import app.system.ModalManager;
+import app.util.ToastNotification; // ✅ IMPORTAR
 import app.view.modals.ClienteModal;
 import com.formdev.flatlaf.FlatClientProperties;
 import com.formdev.flatlaf.extras.FlatSVGIcon;
 import net.miginfocom.swing.MigLayout;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import raven.modal.Toast;
 
 import javax.swing.*;
 import javax.swing.table.DefaultTableModel;
@@ -22,10 +22,6 @@ import java.awt.event.KeyAdapter;
 import java.awt.event.KeyEvent;
 import java.util.List;
 
-/**
- * Vista principal de gestión de clientes con manejo robusto de excepciones
- * Patrón: MVC + Observer
- */
 public class ClientesView extends JPanel {
 
     private static final Logger logger = LoggerFactory.getLogger(ClientesView.class);
@@ -35,7 +31,7 @@ public class ClientesView extends JPanel {
     private DefaultTableModel tableModel;
     private List<Cliente> listaClientesCache; 
     private JTextField txtSearch;
-    private Timer searchTimer; // Para debouncing
+    private Timer searchTimer;
 
     public ClientesView() {
         logger.info("Inicializando ClientesView");
@@ -48,14 +44,12 @@ public class ClientesView extends JPanel {
     private void init() {
         setLayout(new MigLayout("fill, insets 20", "[grow]", "[][grow]"));
 
-        // --- Toolbar ---
         JPanel toolbar = new JPanel(new MigLayout("insets 0, fillx", "[]push[]5[]5[]5[]"));
         
         JLabel title = new JLabel("Gestión de Clientes");
         title.putClientProperty(FlatClientProperties.STYLE, "font:bold +10");
         toolbar.add(title);
 
-        // Campo de búsqueda con debouncing
         txtSearch = new JTextField(20);
         txtSearch.putClientProperty(FlatClientProperties.PLACEHOLDER_TEXT, "Buscar por nombre o cédula...");
         txtSearch.putClientProperty(FlatClientProperties.STYLE, "arc:10");
@@ -81,7 +75,6 @@ public class ClientesView extends JPanel {
 
         add(toolbar, "growx, wrap");
 
-        // --- Tabla ---
         String[] columnNames = {"ID", "Cédula", "Nombre", "Teléfono", "Tipo Cabello", "Extensiones"};
         tableModel = new DefaultTableModel(columnNames, 0) {
             @Override
@@ -92,7 +85,6 @@ public class ClientesView extends JPanel {
         table.setRowHeight(40); 
         table.getTableHeader().putClientProperty(FlatClientProperties.STYLE, "font:bold");
         
-        // Menú contextual
         JPopupMenu popup = new JPopupMenu();
         JMenuItem itemEdit = new JMenuItem("Editar Cliente");
         itemEdit.addActionListener(e -> editSelected());
@@ -120,9 +112,6 @@ public class ClientesView extends JPanel {
         return btn;
     }
 
-    /**
-     * Carga todos los clientes desde la BD
-     */
     private void loadData() {
         logger.info("Cargando lista de clientes");
         
@@ -131,18 +120,19 @@ public class ClientesView extends JPanel {
             filterData(""); 
             
             logger.info("✓ Cargados {} clientes", listaClientesCache.size());
-            // Toast eliminado - el usuario verá los datos en la tabla
             
         } catch (DatabaseException e) {
             logger.error("Error cargando clientes: {}", e.getMessage(), e);
-            showToastSafe(Toast.Type.ERROR, "Error al cargar clientes: " + e.getMessage());
-            listaClientesCache = List.of(); // Lista vacía para evitar NullPointer
+            // ✅ Toast de error
+            ToastNotification.showError(
+                this,
+                "Error al Cargar",
+                "No se pudieron cargar los clientes: " + e.getMessage()
+            );
+            listaClientesCache = List.of();
         }
     }
 
-    /**
-     * Filtra los clientes por query (búsqueda local en caché)
-     */
     private void filterData(String query) {
         logger.debug("Filtrando clientes con query: '{}'", query);
         
@@ -176,9 +166,6 @@ public class ClientesView extends JPanel {
         logger.debug("✓ Filtrados {} clientes", count);
     }
     
-    /**
-     * Programa una búsqueda con debouncing (300ms después de dejar de escribir)
-     */
     private void scheduleSearch() {
         if (searchTimer != null) {
             searchTimer.stop();
@@ -193,14 +180,10 @@ public class ClientesView extends JPanel {
         searchTimer.start();
     }
 
-    /**
-     * Muestra el modal de cliente usando el nuevo sistema
-     */
     private void showClienteModal(Cliente clienteEditar) {
         String accion = clienteEditar == null ? "crear" : "editar";
         logger.info("Abriendo modal para {} cliente", accion);
         
-        // Crear opciones del modal con animación de derecha a izquierda
         ModalOption option = ModalOption.getDefault()
             .setHorizontalPosition(ModalOption.Position.RIGHT)
             .setVerticalPosition(ModalOption.Position.CENTER)
@@ -213,29 +196,21 @@ public class ClientesView extends JPanel {
             .setCloseOnEscape(true)
             .setCloseOnClickOutside(false);
         
-        // Crear el modal con callback
         ClienteModal modal = new ClienteModal(clienteEditar, cliente -> {
             logger.info("Callback: Cliente guardado exitosamente");
             loadData();
-            
-            String mensaje = clienteEditar == null ? 
-                "Cliente registrado exitosamente" : 
-                "Cliente actualizado exitosamente";
-            showToastSafe(Toast.Type.SUCCESS, mensaje);
+            // ✅ El Toast ya se muestra en el modal, no duplicar aquí
         });
         
-        // Mostrar el modal
         ModalManager.showModal(this, modal, option);
     }
 
-    /**
-     * Elimina el cliente seleccionado con confirmación
-     */
     private void deleteSelected() {
         int row = table.getSelectedRow();
         if (row == -1) {
             logger.debug("Intento de eliminar sin selección");
-            showToastSafe(Toast.Type.INFO, "Selecciona un cliente de la tabla");
+            // ✅ Toast de información
+            ToastNotification.showInfo(this, "Seleccione un cliente de la tabla para eliminar");
             return;
         }
         
@@ -247,7 +222,7 @@ public class ClientesView extends JPanel {
 
         int confirm = JOptionPane.showConfirmDialog(
             this,
-            String.format("¿Estás seguro de eliminar a %s (Cédula: %s)?\n\nEsta acción no se puede deshacer.", 
+            String.format("¿Está seguro de eliminar a %s (Cédula: %s)?\n\nEsta acción no se puede deshacer.", 
                 nombre, cedula),
             "Confirmar Eliminación",
             JOptionPane.YES_NO_OPTION,
@@ -261,38 +236,53 @@ public class ClientesView extends JPanel {
                 repository.delete(id);
                 
                 logger.info("✓ Cliente eliminado: ID {} - {}", id, nombre);
-                showToastSafe(Toast.Type.SUCCESS, "Cliente eliminado correctamente");
+                // ✅ Toast de éxito
+                ToastNotification.showSuccess(
+                    this,
+                    "Cliente Eliminado",
+                    "El cliente ha sido eliminado correctamente"
+                );
                 loadData();
                 
             } catch (ClienteNotFoundException e) {
                 logger.warn("Cliente no encontrado al intentar eliminar: {}", e.getMessage());
-                showToastSafe(Toast.Type.WARNING, 
-                    "El cliente ya no existe. Recargando lista...");
+                // ✅ Toast de advertencia
+                ToastNotification.showWarning(
+                    this,
+                    "Cliente No Encontrado",
+                    "El cliente ya no existe. Recargando lista..."
+                );
                 loadData();
                 
             } catch (DatabaseException e) {
                 logger.error("Error al eliminar cliente: {}", e.getMessage(), e);
-                showToastSafe(Toast.Type.ERROR, 
-                    "Error al eliminar: " + e.getMessage());
+                // ✅ Toast de error
+                ToastNotification.showError(
+                    this,
+                    "Error al Eliminar",
+                    "No se pudo eliminar el cliente: " + e.getMessage()
+                );
                 
             } catch (Exception e) {
                 logger.error("Error inesperado al eliminar cliente", e);
-                showToastSafe(Toast.Type.ERROR, 
-                    "Error inesperado: " + e.getMessage());
+                // ✅ Toast de error
+                ToastNotification.showError(
+                    this,
+                    "Error Inesperado",
+                    "Ocurrió un error inesperado al eliminar el cliente"
+                );
             }
         } else {
             logger.debug("Usuario canceló la eliminación");
         }
     }
     
-    /**
-     * Edita el cliente seleccionado
-     */
     private void editSelected() {
         int row = table.getSelectedRow();
         if (row == -1) {
             logger.debug("Intento de editar sin selección");
-            showToastSafe(Toast.Type.INFO, "Selecciona un cliente de la tabla");
+            // ✅ Toast de información
+            ToastNotification.showInfo(this, "Seleccione un cliente de la tabla para editar");
             return;
         }
         
@@ -308,23 +298,13 @@ public class ClientesView extends JPanel {
             showClienteModal(seleccionado);
         } else {
             logger.error("Cliente ID {} no encontrado en caché", id);
-            showToastSafe(Toast.Type.ERROR, 
-                "Error: Cliente no encontrado. Recargando lista...");
+            // ✅ Toast de error
+            ToastNotification.showError(
+                this,
+                "Error",
+                "No se encontró el cliente. Recargando lista..."
+            );
             loadData();
         }
-    }
-    
-    /**
-     * Muestra un toast de forma segura (verifica que el componente esté en la jerarquía)
-     */
-    private void showToastSafe(Toast.Type type, String message) {
-        // Diferir hasta que el componente esté visible
-        SwingUtilities.invokeLater(() -> {
-            if (isDisplayable()) {
-                Toast.show(this, type, message);
-            } else {
-                logger.warn("Toast no mostrado (componente no visible): {}", message);
-            }
-        });
     }
 }
