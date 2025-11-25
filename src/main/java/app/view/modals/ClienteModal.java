@@ -1,13 +1,13 @@
 package app.view.modals;
 
-import app.component.Modal;
 import app.model.Cliente;
 import app.model.TipoCabello;
 import app.repository.ClienteRepository;
 import app.repository.ClienteRepositorySQLite;
 import com.formdev.flatlaf.FlatClientProperties;
-import com.formdev.flatlaf.extras.FlatSVGIcon;
 import net.miginfocom.swing.MigLayout;
+import raven.modal.component.SimpleModalBorder;
+import raven.modal.option.ModalBorderOption;
 
 import javax.swing.*;
 import java.awt.*;
@@ -17,196 +17,216 @@ import java.time.format.DateTimeParseException;
 
 /**
  * Modal para ingresar o editar un cliente
- * Patrón: MVC + Command
- * 
- * @author Sistema Capelli
+ * Usa SimpleModalBorder de la librería modal-dialog
  */
-public class ClienteModal extends Modal {
+public class ClienteModal extends SimpleModalBorder {
     
     private final ClienteRepository repository;
     private final DateTimeFormatter dateFormatter = DateTimeFormatter.ofPattern("dd/MM/yyyy");
     private final ClienteCallback callback;
     private Cliente clienteActual;
     
-    // Componentes UI
+    // Componentes UI del formulario
     private JTextField txtCedula;
     private JTextField txtNombre;
     private JTextField txtTelefono;
     private JTextField txtDireccion;
     private JComboBox<TipoCabello> comboTipoCabello;
     private JTextField txtTipoExtensiones;
-    private JFormattedTextField txtCumpleanos;
-    private JFormattedTextField txtUltimoTinte;
-    private JFormattedTextField txtUltimoQuimico;
-    private JFormattedTextField txtUltimaKeratina;
-    private JFormattedTextField txtUltimoMantenimiento;
-    
-    private JButton btnGuardar;
-    private JButton btnCancelar;
-    
+    private JTextField txtCumpleanos;
+    private JTextField txtUltimoTinte;
+    private JTextField txtUltimoQuimico;
+    private JTextField txtUltimaKeratina;
+    private JTextField txtUltimoMantenimiento;
+
     /**
      * Constructor para nuevo cliente
      */
     public ClienteModal(ClienteCallback callback) {
         this(null, callback);
     }
-    
+
     /**
-     * Constructor para editar cliente
+     * Constructor para editar cliente existente
      */
     public ClienteModal(Cliente cliente, ClienteCallback callback) {
+        super(
+            createFormPanel(), 
+            cliente == null ? "Nuevo Cliente" : "Editar Cliente",
+            new ModalBorderOption()
+                .setUseScroll(true)
+                .setPadding(ModalBorderOption.PaddingType.LARGE),
+            CLOSE_OPTION,
+            (controller, action) -> {
+                if (action == CLOSE_OPTION) {
+                    controller.close();
+                }
+            }
+        );
+        
         this.clienteActual = cliente;
         this.callback = callback;
         this.repository = new ClienteRepositorySQLite();
     }
-    
+
+    /**
+     * Crea el panel del formulario (se ejecuta antes del constructor completo)
+     */
+    private static JPanel createFormPanel() {
+        JPanel panel = new JPanel(new MigLayout("fillx,wrap,insets 0", "[grow,fill]", "[]"));
+        panel.setPreferredSize(new Dimension(550, 600));
+        return panel;
+    }
+
     @Override
     public void installComponent() {
-        setLayout(new MigLayout("fillx,wrap,insets 25 30 25 30", "[grow,fill]", "[]15[]"));
-        setPreferredSize(new Dimension(550, 650));
+        super.installComponent();
         
-        // Estilo del panel
-        putClientProperty(FlatClientProperties.STYLE, "arc:15");
+        // Ahora sí inicializamos los componentes del formulario
+        initializeFormComponents();
         
-        // Crear componentes
-        createHeader();
-        createFormFields();
-        createButtons();
-        
-        // Cargar datos si es edición
+        // Si es edición, cargar los datos
         if (clienteActual != null) {
             loadData();
+            txtCedula.setEnabled(false);
         }
     }
-    
-    private void createHeader() {
-        JPanel headerPanel = new JPanel(new MigLayout("insets 0", "[]push[]", "[]"));
-        headerPanel.setOpaque(false);
+
+    /**
+     * Inicializa todos los componentes del formulario
+     */
+    private void initializeFormComponents() {
+        // Obtener el panel de contenido (component es el panel que pasamos al super)
+        JPanel formPanel = (JPanel) component;
+        formPanel.removeAll();
+        formPanel.setLayout(new MigLayout("fillx,wrap,insets 15", "[120,right][grow,fill]", "[]10[]"));
+
+        // === DATOS PERSONALES ===
+        addSectionLabel(formPanel, "Datos Personales");
         
-        JLabel lblTitle = new JLabel(clienteActual == null ? "Nuevo Cliente" : "Editar Cliente");
-        lblTitle.putClientProperty(FlatClientProperties.STYLE, "font:bold +8");
-        headerPanel.add(lblTitle);
-        
-        JButton btnClose = new JButton(new FlatSVGIcon("icons/delete.svg", 0.4f));
-        btnClose.putClientProperty(FlatClientProperties.STYLE, "" +
-            "arc:999;" +
-            "margin:5,5,5,5;" +
-            "borderWidth:0;" +
-            "focusWidth:0;" +
-            "background:null");
-        btnClose.addActionListener(e -> getController().closeModal());
-        headerPanel.add(btnClose);
-        
-        add(headerPanel, "growx,gapbottom 15");
-        add(new JSeparator(), "growx,gapbottom 10");
-    }
-    
-    private void createFormFields() {
-        // Sección: Datos Personales
-        addSectionLabel("Datos Personales");
-        
-        txtCedula = createTextField("Cédula");
-        add(createFieldPanel("Cédula:", txtCedula));
+        txtCedula = createTextField("Ej: 1234567890");
+        addField(formPanel, "Cédula:", txtCedula);
         
         txtNombre = createTextField("Nombre completo");
-        add(createFieldPanel("Nombre:", txtNombre));
+        addField(formPanel, "Nombre:", txtNombre);
         
-        txtTelefono = createTextField("Teléfono");
-        add(createFieldPanel("Teléfono:", txtTelefono));
+        txtTelefono = createTextField("Ej: 0412-1234567");
+        addField(formPanel, "Teléfono:", txtTelefono);
         
-        txtDireccion = createTextField("Dirección");
-        add(createFieldPanel("Dirección:", txtDireccion));
-        
-        // Sección: Perfil Capilar
-        addSectionLabel("Perfil Capilar");
+        txtDireccion = createTextField("Dirección completa");
+        addField(formPanel, "Dirección:", txtDireccion);
+
+        // === PERFIL CAPILAR ===
+        addSectionLabel(formPanel, "Perfil Capilar");
         
         comboTipoCabello = new JComboBox<>(TipoCabello.values());
-        add(createFieldPanel("Tipo Cabello:", comboTipoCabello));
+        comboTipoCabello.putClientProperty(FlatClientProperties.STYLE, "arc:8");
+        addField(formPanel, "Tipo Cabello:", comboTipoCabello);
         
         txtTipoExtensiones = createTextField("Tipo de extensiones (opcional)");
-        add(createFieldPanel("Extensiones:", txtTipoExtensiones));
-        
-        // Sección: Historial
-        addSectionLabel("Historial (DD/MM/AAAA)");
+        addField(formPanel, "Extensiones:", txtTipoExtensiones);
+
+        // === HISTORIAL ===
+        addSectionLabel(formPanel, "Historial (DD/MM/AAAA - Opcional)");
         
         txtCumpleanos = createDateField();
-        add(createFieldPanel("Cumpleaños:", txtCumpleanos));
+        addField(formPanel, "Cumpleaños:", txtCumpleanos);
         
         txtUltimoTinte = createDateField();
-        add(createFieldPanel("Último Tinte:", txtUltimoTinte));
+        addField(formPanel, "Último Tinte:", txtUltimoTinte);
         
         txtUltimoQuimico = createDateField();
-        add(createFieldPanel("Último Químico:", txtUltimoQuimico));
+        addField(formPanel, "Último Químico:", txtUltimoQuimico);
         
         txtUltimaKeratina = createDateField();
-        add(createFieldPanel("Última Keratina:", txtUltimaKeratina));
+        addField(formPanel, "Última Keratina:", txtUltimaKeratina);
         
         txtUltimoMantenimiento = createDateField();
-        add(createFieldPanel("Mantenimiento:", txtUltimoMantenimiento));
+        addField(formPanel, "Mantenimiento:", txtUltimoMantenimiento);
+
+        // === BOTONES ===
+        JPanel buttonPanel = createButtonPanel();
+        formPanel.add(buttonPanel, "span 2,growx,gaptop 20");
     }
-    
-    private void createButtons() {
-        JPanel buttonPanel = new JPanel(new MigLayout("insets 10 0 0 0", "[]push[]"));
-        buttonPanel.setOpaque(false);
+
+    /**
+     * Crea el panel de botones
+     */
+    private JPanel createButtonPanel() {
+        JPanel panel = new JPanel(new MigLayout("insets 0", "[]push[]"));
+        panel.setOpaque(false);
         
-        btnCancelar = new JButton("Cancelar");
+        JButton btnCancelar = new JButton("Cancelar");
         btnCancelar.putClientProperty(FlatClientProperties.STYLE, "arc:10");
         btnCancelar.addActionListener(e -> getController().closeModal());
         
-        btnGuardar = new JButton(clienteActual == null ? "Guardar" : "Actualizar");
-        btnGuardar.putClientProperty(FlatClientProperties.STYLE, "" +
-            "arc:10;" +
-            "background:$Component.accentColor;" +
-            "foreground:#fff");
+        JButton btnGuardar = new JButton(clienteActual == null ? "Guardar" : "Actualizar");
+        btnGuardar.putClientProperty(FlatClientProperties.STYLE, 
+            "arc:10;background:$Component.accentColor;foreground:#fff");
         btnGuardar.addActionListener(e -> guardarCliente());
         
-        buttonPanel.add(btnCancelar);
-        buttonPanel.add(btnGuardar);
-        
-        add(buttonPanel, "span,growx,gaptop 10");
-    }
-    
-    private JPanel createFieldPanel(String label, JComponent field) {
-        JPanel panel = new JPanel(new MigLayout("insets 0", "[120]10[grow,fill]", "[]"));
-        panel.setOpaque(false);
-        
-        JLabel lbl = new JLabel(label);
-        panel.add(lbl);
-        panel.add(field);
+        panel.add(btnCancelar);
+        panel.add(btnGuardar);
         
         return panel;
     }
-    
+
+    /**
+     * Agrega una etiqueta de sección
+     */
+    private void addSectionLabel(JPanel panel, String text) {
+        JLabel label = new JLabel(text);
+        label.putClientProperty(FlatClientProperties.STYLE, 
+            "font:bold +1;foreground:$Component.accentColor");
+        panel.add(label, "span 2,gaptop 10");
+        panel.add(new JSeparator(), "span 2,growx,gapbottom 5");
+    }
+
+    /**
+     * Agrega un campo al formulario
+     */
+    private void addField(JPanel panel, String labelText, JComponent field) {
+        JLabel label = new JLabel(labelText);
+        panel.add(label);
+        panel.add(field);
+    }
+
+    /**
+     * Crea un campo de texto estándar
+     */
     private JTextField createTextField(String placeholder) {
         JTextField field = new JTextField();
         field.putClientProperty(FlatClientProperties.PLACEHOLDER_TEXT, placeholder);
         field.putClientProperty(FlatClientProperties.STYLE, "arc:8");
         return field;
     }
-    
-    private JFormattedTextField createDateField() {
-        JFormattedTextField field = new JFormattedTextField();
+
+    /**
+     * Crea un campo de fecha
+     */
+    private JTextField createDateField() {
+        JTextField field = new JTextField();
         field.putClientProperty(FlatClientProperties.PLACEHOLDER_TEXT, "dd/mm/aaaa");
         field.putClientProperty(FlatClientProperties.STYLE, "arc:8");
         return field;
     }
-    
-    private void addSectionLabel(String text) {
-        JLabel lbl = new JLabel(text);
-        lbl.putClientProperty(FlatClientProperties.STYLE, "" +
-            "font:bold +1;" +
-            "foreground:$Component.accentColor");
-        add(lbl, "gaptop 10,gapbottom 5");
-    }
-    
+
+    /**
+     * Carga los datos del cliente en el formulario
+     */
     private void loadData() {
-        txtCedula.setText(clienteActual.getCedula());
-        txtCedula.setEnabled(false);
-        txtNombre.setText(clienteActual.getNombreCompleto());
-        txtTelefono.setText(clienteActual.getTelefono());
-        txtDireccion.setText(clienteActual.getDireccion());
-        comboTipoCabello.setSelectedItem(clienteActual.getTipoCabello());
-        txtTipoExtensiones.setText(clienteActual.getTipoExtensiones());
+        if (clienteActual == null) return;
+        
+        txtCedula.setText(clienteActual.getCedula() != null ? clienteActual.getCedula() : "");
+        txtNombre.setText(clienteActual.getNombreCompleto() != null ? clienteActual.getNombreCompleto() : "");
+        txtTelefono.setText(clienteActual.getTelefono() != null ? clienteActual.getTelefono() : "");
+        txtDireccion.setText(clienteActual.getDireccion() != null ? clienteActual.getDireccion() : "");
+        
+        if (clienteActual.getTipoCabello() != null) {
+            comboTipoCabello.setSelectedItem(clienteActual.getTipoCabello());
+        }
+        
+        txtTipoExtensiones.setText(clienteActual.getTipoExtensiones() != null ? clienteActual.getTipoExtensiones() : "");
         
         setDateField(txtCumpleanos, clienteActual.getFechaCumpleanos());
         setDateField(txtUltimoTinte, clienteActual.getFechaUltimoTinte());
@@ -214,19 +234,48 @@ public class ClienteModal extends Modal {
         setDateField(txtUltimaKeratina, clienteActual.getFechaUltimaKeratina());
         setDateField(txtUltimoMantenimiento, clienteActual.getFechaUltimoMantenimiento());
     }
-    
+
+    /**
+     * Establece el valor de un campo de fecha
+     */
+    private void setDateField(JTextField field, LocalDate date) {
+        if (date != null) {
+            field.setText(date.format(dateFormatter));
+        }
+    }
+
+    /**
+     * Obtiene la fecha de un campo de texto
+     */
+    private LocalDate getDateField(JTextField field) {
+        String text = field.getText().trim();
+        if (text.isEmpty()) return null;
+        
+        try {
+            return LocalDate.parse(text, dateFormatter);
+        } catch (DateTimeParseException e) {
+            return null;
+        }
+    }
+
+    /**
+     * Guarda el cliente en la base de datos
+     */
     private void guardarCliente() {
         try {
-            // Validaciones
+            // Validaciones básicas
             if (txtCedula.getText().trim().isEmpty()) {
                 showError("La cédula es obligatoria");
-                return;
-            }
-            if (txtNombre.getText().trim().isEmpty()) {
-                showError("El nombre es obligatorio");
+                txtCedula.requestFocus();
                 return;
             }
             
+            if (txtNombre.getText().trim().isEmpty()) {
+                showError("El nombre es obligatorio");
+                txtNombre.requestFocus();
+                return;
+            }
+
             // Crear o actualizar cliente
             Cliente cliente = clienteActual != null ? clienteActual : new Cliente();
             cliente.setCedula(txtCedula.getText().trim());
@@ -241,50 +290,42 @@ public class ClienteModal extends Modal {
             cliente.setFechaUltimoQuimico(getDateField(txtUltimoQuimico));
             cliente.setFechaUltimaKeratina(getDateField(txtUltimaKeratina));
             cliente.setFechaUltimoMantenimiento(getDateField(txtUltimoMantenimiento));
-            
-            // Guardar en BD
+
+            // Guardar en base de datos
             if (clienteActual == null) {
                 repository.create(cliente);
             } else {
                 repository.update(cliente);
             }
-            
-            // Notificar éxito
+
+            // Notificar éxito mediante callback
             if (callback != null) {
                 callback.onSuccess(cliente);
             }
-            
+
+            // Cerrar el modal
             getController().closeModal();
-            
+
         } catch (Exception e) {
             showError("Error al guardar: " + e.getMessage());
             e.printStackTrace();
         }
     }
-    
-    private void setDateField(JFormattedTextField field, LocalDate date) {
-        if (date != null) {
-            field.setText(date.format(dateFormatter));
-        }
-    }
-    
-    private LocalDate getDateField(JFormattedTextField field) {
-        String text = field.getText().trim();
-        if (text.isEmpty()) return null;
-        try {
-            return LocalDate.parse(text, dateFormatter);
-        } catch (DateTimeParseException e) {
-            return null;
-        }
-    }
-    
+
+    /**
+     * Muestra un mensaje de error
+     */
     private void showError(String message) {
-        JOptionPane.showMessageDialog(this, message, "Error", JOptionPane.ERROR_MESSAGE);
+        JOptionPane.showMessageDialog(
+            this, 
+            message, 
+            "Error", 
+            JOptionPane.ERROR_MESSAGE
+        );
     }
-    
+
     /**
      * Interfaz callback para notificar eventos
-     * Patrón: Observer
      */
     public interface ClienteCallback {
         void onSuccess(Cliente cliente);

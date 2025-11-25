@@ -1,15 +1,16 @@
 package app.view;
 
 import app.model.Cliente;
-import app.option.ModalOption;
 import app.repository.ClienteRepository;
 import app.repository.ClienteRepositorySQLite;
-import app.system.ModalManager;
 import app.view.modals.ClienteModal;
 import com.formdev.flatlaf.FlatClientProperties;
 import com.formdev.flatlaf.extras.FlatSVGIcon;
 import net.miginfocom.swing.MigLayout;
+import raven.modal.ModalDialog;
 import raven.modal.Toast;
+import raven.modal.option.Location;
+import raven.modal.option.Option;
 
 import javax.swing.*;
 import javax.swing.table.DefaultTableModel;
@@ -19,7 +20,7 @@ import java.util.List;
 
 /**
  * Vista principal de gestión de clientes
- * Integrada con el nuevo sistema de modales
+ * Integrada con la librería modal-dialog
  */
 public class ClientesView extends JPanel {
 
@@ -35,16 +36,32 @@ public class ClientesView extends JPanel {
         loadData(); 
     }
 
+    /**
+     * Inicializa la interfaz
+     */
     private void init() {
-        setLayout(new MigLayout("fill, insets 20", "[grow]", "[][grow]"));
+        setLayout(new MigLayout("fill,insets 20", "[grow]", "[][grow]"));
 
-        // --- Toolbar ---
-        JPanel toolbar = new JPanel(new MigLayout("insets 0, fillx", "[]push[]5[]5[]5[]"));
+        // === TOOLBAR ===
+        JPanel toolbar = createToolbar();
+        add(toolbar, "growx,wrap");
+
+        // === TABLA ===
+        createTable();
+    }
+
+    /**
+     * Crea el toolbar con botones de acción
+     */
+    private JPanel createToolbar() {
+        JPanel toolbar = new JPanel(new MigLayout("insets 0,fillx", "[]push[]5[]5[]5[]"));
         
+        // Título
         JLabel title = new JLabel("Gestión de Clientes");
         title.putClientProperty(FlatClientProperties.STYLE, "font:bold +10");
         toolbar.add(title);
 
+        // Búsqueda
         txtSearch = new JTextField(20);
         txtSearch.putClientProperty(FlatClientProperties.PLACEHOLDER_TEXT, "Buscar...");
         txtSearch.putClientProperty(FlatClientProperties.STYLE, "arc:10");
@@ -56,31 +73,72 @@ public class ClientesView extends JPanel {
         });
         toolbar.add(txtSearch);
 
-        JButton cmdAdd = createToolButton("icons/add.svg", "Nuevo Cliente", "$Component.accentColor", "#fff");
+        // Botón Nuevo
+        JButton cmdAdd = createToolButton(
+            "icons/add.svg", 
+            "Nuevo Cliente", 
+            "$Component.accentColor", 
+            "#fff"
+        );
         cmdAdd.addActionListener(e -> showClienteModal(null));
         toolbar.add(cmdAdd);
         
-        JButton cmdEdit = createToolButton("icons/edit.svg", "Editar Selección", null, null);
+        // Botón Editar
+        JButton cmdEdit = createToolButton(
+            "icons/edit.svg", 
+            "Editar Selección", 
+            null, 
+            null
+        );
         cmdEdit.addActionListener(e -> editSelected());
         toolbar.add(cmdEdit);
 
-        JButton cmdDel = createToolButton("icons/delete.svg", "Eliminar Selección", "$Error.color", "#fff");
+        // Botón Eliminar
+        JButton cmdDel = createToolButton(
+            "icons/delete.svg", 
+            "Eliminar Selección", 
+            "$Error.color", 
+            "#fff"
+        );
         cmdDel.addActionListener(e -> deleteSelected());
         toolbar.add(cmdDel);
 
-        add(toolbar, "growx, wrap");
+        return toolbar;
+    }
 
-        // --- Tabla ---
+    /**
+     * Crea un botón de toolbar con estilo
+     */
+    private JButton createToolButton(String iconPath, String tooltip, String bgColor, String fgColor) {
+        JButton btn = new JButton();
+        btn.setIcon(new FlatSVGIcon(iconPath, 20, 20));
+        btn.setToolTipText(tooltip);
+        
+        String style = "arc:10;margin:5,10,5,10;";
+        if (bgColor != null) style += "background:" + bgColor + ";";
+        if (fgColor != null) style += "foreground:" + fgColor + ";";
+        
+        btn.putClientProperty(FlatClientProperties.STYLE, style);
+        return btn;
+    }
+
+    /**
+     * Crea la tabla de clientes
+     */
+    private void createTable() {
         String[] columnNames = {"ID", "Cédula", "Nombre", "Teléfono", "Tipo Cabello", "Extensiones"};
         tableModel = new DefaultTableModel(columnNames, 0) {
             @Override
-            public boolean isCellEditable(int row, int column) { return false; }
+            public boolean isCellEditable(int row, int column) { 
+                return false; 
+            }
         };
         
         table = new JTable(tableModel);
         table.setRowHeight(40); 
         table.getTableHeader().putClientProperty(FlatClientProperties.STYLE, "font:bold");
         
+        // Menú contextual
         JPopupMenu popup = new JPopupMenu();
         JMenuItem itemEdit = new JMenuItem("Editar Cliente");
         itemEdit.addActionListener(e -> editSelected());
@@ -94,60 +152,58 @@ public class ClientesView extends JPanel {
         scroll.putClientProperty(FlatClientProperties.STYLE, "border:0,0,0,0");
         add(scroll, "grow");
     }
-   
-    private JButton createToolButton(String iconPath, String tooltip, String bgColor, String fgColor) {
-        JButton btn = new JButton();
-        btn.setIcon(new FlatSVGIcon(iconPath, 20, 20));
-        btn.setToolTipText(tooltip);
-        String style = "arc:10; margin:5,10,5,10;";
-        if (bgColor != null) style += "background:" + bgColor + ";";
-        if (fgColor != null) style += "foreground:" + fgColor + ";";
-        btn.putClientProperty(FlatClientProperties.STYLE, style);
-        return btn;
-    }
 
+    /**
+     * Carga los datos desde la base de datos
+     */
     private void loadData() {
         try {
             listaClientesCache = repository.findAll();
             filterData(""); 
         } catch (Exception e) {
             e.printStackTrace();
-            Toast.show(this, Toast.Type.ERROR, "Error DB: " + e.getMessage());
+            Toast.show(this, Toast.Type.ERROR, "Error al cargar datos: " + e.getMessage());
         }
     }
 
+    /**
+     * Filtra los datos de la tabla
+     */
     private void filterData(String query) {
         tableModel.setRowCount(0); 
         if (listaClientesCache == null) return;
+        
         String q = query.toLowerCase();
         for (Cliente c : listaClientesCache) {
             if (c.getNombreCompleto().toLowerCase().contains(q) || 
                 (c.getCedula() != null && c.getCedula().contains(q))) {
                 tableModel.addRow(new Object[]{
-                    c.getId(), c.getCedula(), c.getNombreCompleto(), 
-                    c.getTelefono(), c.getTipoCabello(), c.getTipoExtensiones()
+                    c.getId(), 
+                    c.getCedula(), 
+                    c.getNombreCompleto(), 
+                    c.getTelefono(), 
+                    c.getTipoCabello(), 
+                    c.getTipoExtensiones()
                 });
             }
         }
     }
 
     /**
-     * Muestra el modal de cliente usando el nuevo sistema
-     * Animación de derecha a izquierda
+     * Muestra el modal de cliente (nuevo o editar)
+     * Usa la librería modal-dialog con animación de derecha a izquierda
      */
     private void showClienteModal(Cliente clienteEditar) {
-        // Crear opciones del modal con animación de derecha a izquierda
-        ModalOption option = ModalOption.getDefault()
-            .setHorizontalPosition(ModalOption.Position.RIGHT)
-            .setVerticalPosition(ModalOption.Position.CENTER)
-            .setAnimationDirection(ModalOption.AnimationDirection.RIGHT_TO_LEFT)
-            .setAnimationEnabled(true)
-            .setDuration(350)
-            .setMargin(0)
-            .setPadding(0)
-            .setRoundness(0)
-            .setCloseOnEscape(true)
-            .setCloseOnClickOutside(false);
+        // Crear opciones del modal con animación desde la derecha
+        Option option = ModalDialog.createOption();
+        option.getLayoutOption()
+            .setLocation(Location.RIGHT, Location.CENTER)
+            .setAnimateDistance(-0.7f, 0)
+            .setSize(550, 0.9f);
+        
+        option.setDuration(350);
+        option.getBorderOption()
+            .setRound(0);
         
         // Crear el modal con callback
         ClienteModal modal = new ClienteModal(clienteEditar, cliente -> {
@@ -158,8 +214,31 @@ public class ClientesView extends JPanel {
             Toast.show(this, Toast.Type.SUCCESS, mensaje);
         });
         
-        // Mostrar el modal
-        ModalManager.showModal(this, modal, option);
+        // Mostrar el modal usando la librería estándar
+        ModalDialog.showModal(this, modal, option);
+    }
+
+    /**
+     * Edita el cliente seleccionado
+     */
+    private void editSelected() {
+        int row = table.getSelectedRow();
+        if (row == -1) {
+            Toast.show(this, Toast.Type.INFO, "Selecciona un cliente de la tabla");
+            return;
+        }
+        
+        int id = (int) table.getValueAt(row, 0); 
+        Cliente seleccionado = listaClientesCache.stream()
+                .filter(c -> c.getId() == id)
+                .findFirst()
+                .orElse(null);
+        
+        if (seleccionado != null) {
+            showClienteModal(seleccionado);
+        } else {
+            Toast.show(this, Toast.Type.ERROR, "Error: No se encontró el cliente seleccionado");
+        }
     }
 
     /**
@@ -191,29 +270,6 @@ public class ClientesView extends JPanel {
             } catch (Exception e) {
                 Toast.show(this, Toast.Type.ERROR, "Error al eliminar: " + e.getMessage());
             }
-        }
-    }
-    
-    /**
-     * Edita el cliente seleccionado
-     */
-    private void editSelected() {
-        int row = table.getSelectedRow();
-        if (row == -1) {
-            Toast.show(this, Toast.Type.INFO, "Selecciona un cliente de la tabla");
-            return;
-        }
-        
-        int id = (int) table.getValueAt(row, 0); 
-        Cliente seleccionado = listaClientesCache.stream()
-                .filter(c -> c.getId() == id)
-                .findFirst()
-                .orElse(null);
-        
-        if (seleccionado != null) {
-            showClienteModal(seleccionado);
-        } else {
-            Toast.show(this, Toast.Type.ERROR, "Error: No se encontró el cliente seleccionado");
         }
     }
 }
