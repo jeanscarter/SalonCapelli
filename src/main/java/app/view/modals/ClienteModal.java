@@ -74,14 +74,29 @@ public class ClienteModal extends Modal {
     public void installComponent() {
         logger.debug("Instalando componentes del modal");
         
-        setLayout(new MigLayout("fillx,wrap,insets 25 30 25 30", "[grow,fill]", "[]15[]"));
-        setPreferredSize(new Dimension(550, 650));
+        // Layout principal sin altura fija
+        setLayout(new BorderLayout());
+        setPreferredSize(new Dimension(550, 700)); // Aumentado a 700px
         
         putClientProperty(FlatClientProperties.STYLE, "arc:15");
         
-        createHeader();
-        createFormFields();
-        createButtons();
+        // Panel principal con scroll
+        JPanel mainPanel = new JPanel(new MigLayout("fillx,wrap,insets 25 30 25 30", "[grow,fill]", "[]15[]"));
+        mainPanel.setOpaque(false);
+        
+        createHeader(mainPanel);
+        createFormFields(mainPanel);
+        createButtons(mainPanel);
+        
+        // Agregar scroll
+        JScrollPane scrollPane = new JScrollPane(mainPanel);
+        scrollPane.setBorder(null);
+        scrollPane.setOpaque(false);
+        scrollPane.getViewport().setOpaque(false);
+        scrollPane.getVerticalScrollBar().setUnitIncrement(16);
+        scrollPane.putClientProperty(FlatClientProperties.STYLE, "border:0,0,0,0");
+        
+        add(scrollPane, BorderLayout.CENTER);
         
         if (clienteActual != null) {
             loadData();
@@ -90,7 +105,7 @@ public class ClienteModal extends Modal {
         logger.debug("✓ Componentes instalados");
     }
     
-    private void createHeader() {
+    private void createHeader(JPanel parent) {
         JPanel headerPanel = new JPanel(new MigLayout("insets 0", "[]push[]", "[]"));
         headerPanel.setOpaque(false);
         
@@ -112,55 +127,55 @@ public class ClienteModal extends Modal {
         });
         headerPanel.add(btnClose);
         
-        add(headerPanel, "growx,gapbottom 15");
-        add(new JSeparator(), "growx,gapbottom 10");
+        parent.add(headerPanel, "growx,gapbottom 15");
+        parent.add(new JSeparator(), "growx,gapbottom 10");
     }
     
-    private void createFormFields() {
+    private void createFormFields(JPanel parent) {
         // Sección: Datos Personales
-        addSectionLabel("Datos Personales");
+        addSectionLabel(parent, "Datos Personales");
         
         txtCedula = createTextField("V-12345678 o E-12345678");
-        add(createFieldPanel("Cédula:", txtCedula));
+        parent.add(createFieldPanel("Cédula:", txtCedula));
         
         txtNombre = createTextField("Nombre completo");
-        add(createFieldPanel("Nombre:", txtNombre));
+        parent.add(createFieldPanel("Nombre:", txtNombre));
         
         txtTelefono = createTextField("0412-1234567");
-        add(createFieldPanel("Teléfono:", txtTelefono));
+        parent.add(createFieldPanel("Teléfono:", txtTelefono));
         
         txtDireccion = createTextField("Dirección completa");
-        add(createFieldPanel("Dirección:", txtDireccion));
+        parent.add(createFieldPanel("Dirección:", txtDireccion));
         
         // Sección: Perfil Capilar
-        addSectionLabel("Perfil Capilar");
+        addSectionLabel(parent, "Perfil Capilar");
         
         comboTipoCabello = new JComboBox<>(TipoCabello.values());
-        add(createFieldPanel("Tipo Cabello:", comboTipoCabello));
+        parent.add(createFieldPanel("Tipo Cabello:", comboTipoCabello));
         
         txtTipoExtensiones = createTextField("Tipo de extensiones (opcional)");
-        add(createFieldPanel("Extensiones:", txtTipoExtensiones));
+        parent.add(createFieldPanel("Extensiones:", txtTipoExtensiones));
         
         // Sección: Historial
-        addSectionLabel("Historial (DD/MM/AAAA - Opcional)");
+        addSectionLabel(parent, "Historial (DD/MM/AAAA - Opcional)");
         
         txtCumpleanos = createDateField();
-        add(createFieldPanel("Cumpleaños:", txtCumpleanos));
+        parent.add(createFieldPanel("Cumpleaños:", txtCumpleanos));
         
         txtUltimoTinte = createDateField();
-        add(createFieldPanel("Último Tinte:", txtUltimoTinte));
+        parent.add(createFieldPanel("Último Tinte:", txtUltimoTinte));
         
         txtUltimoQuimico = createDateField();
-        add(createFieldPanel("Último Químico:", txtUltimoQuimico));
+        parent.add(createFieldPanel("Último Químico:", txtUltimoQuimico));
         
         txtUltimaKeratina = createDateField();
-        add(createFieldPanel("Última Keratina:", txtUltimaKeratina));
+        parent.add(createFieldPanel("Última Keratina:", txtUltimaKeratina));
         
         txtUltimoMantenimiento = createDateField();
-        add(createFieldPanel("Mantenimiento:", txtUltimoMantenimiento));
+        parent.add(createFieldPanel("Mantenimiento:", txtUltimoMantenimiento));
     }
     
-    private void createButtons() {
+    private void createButtons(JPanel parent) {
         JPanel buttonPanel = new JPanel(new MigLayout("insets 10 0 0 0", "[]push[]"));
         buttonPanel.setOpaque(false);
         
@@ -181,7 +196,7 @@ public class ClienteModal extends Modal {
         buttonPanel.add(btnCancelar);
         buttonPanel.add(btnGuardar);
         
-        add(buttonPanel, "span,growx,gaptop 10");
+        parent.add(buttonPanel, "span,growx,gaptop 10");
     }
     
     private JPanel createFieldPanel(String label, JComponent field) {
@@ -209,12 +224,12 @@ public class ClienteModal extends Modal {
         return field;
     }
     
-    private void addSectionLabel(String text) {
+    private void addSectionLabel(JPanel parent, String text) {
         JLabel lbl = new JLabel(text);
         lbl.putClientProperty(FlatClientProperties.STYLE, "" +
             "font:bold +1;" +
             "foreground:$Component.accentColor");
-        add(lbl, "gaptop 10,gapbottom 5");
+        parent.add(lbl, "gaptop 10,gapbottom 5");
     }
     
     private void loadData() {

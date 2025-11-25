@@ -131,13 +131,11 @@ public class ClientesView extends JPanel {
             filterData(""); 
             
             logger.info("✓ Cargados {} clientes", listaClientesCache.size());
-            Toast.show(this, Toast.Type.SUCCESS, 
-                String.format("Se cargaron %d clientes", listaClientesCache.size()));
+            // Toast eliminado - el usuario verá los datos en la tabla
             
         } catch (DatabaseException e) {
             logger.error("Error cargando clientes: {}", e.getMessage(), e);
-            Toast.show(this, Toast.Type.ERROR, 
-                "Error al cargar clientes: " + e.getMessage());
+            showToastSafe(Toast.Type.ERROR, "Error al cargar clientes: " + e.getMessage());
             listaClientesCache = List.of(); // Lista vacía para evitar NullPointer
         }
     }
@@ -223,7 +221,7 @@ public class ClientesView extends JPanel {
             String mensaje = clienteEditar == null ? 
                 "Cliente registrado exitosamente" : 
                 "Cliente actualizado exitosamente";
-            Toast.show(this, Toast.Type.SUCCESS, mensaje);
+            showToastSafe(Toast.Type.SUCCESS, mensaje);
         });
         
         // Mostrar el modal
@@ -237,7 +235,7 @@ public class ClientesView extends JPanel {
         int row = table.getSelectedRow();
         if (row == -1) {
             logger.debug("Intento de eliminar sin selección");
-            Toast.show(this, Toast.Type.INFO, "Selecciona un cliente de la tabla");
+            showToastSafe(Toast.Type.INFO, "Selecciona un cliente de la tabla");
             return;
         }
         
@@ -263,23 +261,23 @@ public class ClientesView extends JPanel {
                 repository.delete(id);
                 
                 logger.info("✓ Cliente eliminado: ID {} - {}", id, nombre);
-                Toast.show(this, Toast.Type.SUCCESS, "Cliente eliminado correctamente");
+                showToastSafe(Toast.Type.SUCCESS, "Cliente eliminado correctamente");
                 loadData();
                 
             } catch (ClienteNotFoundException e) {
                 logger.warn("Cliente no encontrado al intentar eliminar: {}", e.getMessage());
-                Toast.show(this, Toast.Type.WARNING, 
+                showToastSafe(Toast.Type.WARNING, 
                     "El cliente ya no existe. Recargando lista...");
                 loadData();
                 
             } catch (DatabaseException e) {
                 logger.error("Error al eliminar cliente: {}", e.getMessage(), e);
-                Toast.show(this, Toast.Type.ERROR, 
+                showToastSafe(Toast.Type.ERROR, 
                     "Error al eliminar: " + e.getMessage());
                 
             } catch (Exception e) {
                 logger.error("Error inesperado al eliminar cliente", e);
-                Toast.show(this, Toast.Type.ERROR, 
+                showToastSafe(Toast.Type.ERROR, 
                     "Error inesperado: " + e.getMessage());
             }
         } else {
@@ -294,7 +292,7 @@ public class ClientesView extends JPanel {
         int row = table.getSelectedRow();
         if (row == -1) {
             logger.debug("Intento de editar sin selección");
-            Toast.show(this, Toast.Type.INFO, "Selecciona un cliente de la tabla");
+            showToastSafe(Toast.Type.INFO, "Selecciona un cliente de la tabla");
             return;
         }
         
@@ -310,9 +308,23 @@ public class ClientesView extends JPanel {
             showClienteModal(seleccionado);
         } else {
             logger.error("Cliente ID {} no encontrado en caché", id);
-            Toast.show(this, Toast.Type.ERROR, 
+            showToastSafe(Toast.Type.ERROR, 
                 "Error: Cliente no encontrado. Recargando lista...");
             loadData();
         }
+    }
+    
+    /**
+     * Muestra un toast de forma segura (verifica que el componente esté en la jerarquía)
+     */
+    private void showToastSafe(Toast.Type type, String message) {
+        // Diferir hasta que el componente esté visible
+        SwingUtilities.invokeLater(() -> {
+            if (isDisplayable()) {
+                Toast.show(this, type, message);
+            } else {
+                logger.warn("Toast no mostrado (componente no visible): {}", message);
+            }
+        });
     }
 }
