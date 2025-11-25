@@ -1,23 +1,26 @@
 package app.view;
 
 import app.model.Cliente;
+import app.option.ModalOption;
 import app.repository.ClienteRepository;
 import app.repository.ClienteRepositorySQLite;
-import app.view.forms.ClienteForm;
+import app.system.ModalManager;
+import app.view.modals.ClienteModal;
 import com.formdev.flatlaf.FlatClientProperties;
 import com.formdev.flatlaf.extras.FlatSVGIcon;
-import java.awt.Component;
-import java.awt.Window;
+import net.miginfocom.swing.MigLayout;
+import raven.modal.Toast;
+
+import javax.swing.*;
+import javax.swing.table.DefaultTableModel;
 import java.awt.event.KeyAdapter;
 import java.awt.event.KeyEvent;
 import java.util.List;
-import javax.swing.*;
-import javax.swing.table.DefaultTableModel;
-import net.miginfocom.swing.MigLayout;
-import raven.modal.ModalDialog;
-import raven.modal.Toast;
-import raven.modal.component.SimpleModalBorder;
 
+/**
+ * Vista principal de gestión de clientes
+ * Integrada con el nuevo sistema de modales
+ */
 public class ClientesView extends JPanel {
 
     private final ClienteRepository repository;
@@ -54,7 +57,7 @@ public class ClientesView extends JPanel {
         toolbar.add(txtSearch);
 
         JButton cmdAdd = createToolButton("icons/add.svg", "Nuevo Cliente", "$Component.accentColor", "#fff");
-        cmdAdd.addActionListener(e -> showClienteForm(null));
+        cmdAdd.addActionListener(e -> showClienteModal(null));
         toolbar.add(cmdAdd);
         
         JButton cmdEdit = createToolButton("icons/edit.svg", "Editar Selección", null, null);
@@ -121,65 +124,47 @@ public class ClientesView extends JPanel {
             if (c.getNombreCompleto().toLowerCase().contains(q) || 
                 (c.getCedula() != null && c.getCedula().contains(q))) {
                 tableModel.addRow(new Object[]{
-                    c.getId(), c.getCedula(), c.getNombreCompleto(), c.getTelefono(), c.getTipoCabello(), c.getTipoExtensiones()
+                    c.getId(), c.getCedula(), c.getNombreCompleto(), 
+                    c.getTelefono(), c.getTipoCabello(), c.getTipoExtensiones()
                 });
             }
         }
     }
 
-    private void showClienteForm(Cliente clienteEditar) {
-        // Crear el formulario
-        ClienteForm form = new ClienteForm();
-        if (clienteEditar != null) {
-            form.loadData(clienteEditar);
-        }
-
-        // Crear el panel contenedor
-        JPanel formPanel = new JPanel(new MigLayout("fill, insets 0", "[grow]", "[grow]"));
-        formPanel.add(form, "grow");
-
-        // Configurar opciones del modal
-        SimpleModalBorder.Option[] options = {
-            new SimpleModalBorder.Option("Guardar", SimpleModalBorder.YES_OPTION),
-            new SimpleModalBorder.Option("Cancelar", SimpleModalBorder.CANCEL_OPTION)
-        };
-
-        // Crear el modal border
-        SimpleModalBorder modalBorder = new SimpleModalBorder(
-            formPanel,
-            (clienteEditar == null ? "Nuevo Cliente" : "Editar Cliente"),
-            options,
-            (controller, action) -> {
-                if (action == SimpleModalBorder.YES_OPTION) {
-                    try {
-                        Cliente c = form.getData();
-                        
-                        if (clienteEditar == null) {
-                            repository.create(c);
-                            Toast.show(this, Toast.Type.SUCCESS, "Cliente registrado exitosamente");
-                        } else {
-                            c.setId(clienteEditar.getId());
-                            repository.update(c);
-                            Toast.show(this, Toast.Type.SUCCESS, "Cliente actualizado exitosamente");
-                        }
-                        
-                        loadData();
-                        controller.close();
-                        
-                    } catch (Exception ex) {
-                        Toast.show(this, Toast.Type.WARNING, ex.getMessage());
-                        // NO cerramos el modal para que el usuario pueda corregir
-                    }
-                } else {
-                    controller.close();
-                }
-            }
-        );
-
-        // Mostrar el modal - Esta es la forma correcta para la versión 2.6.0-SNAPSHOT
-        ModalDialog.showModal(this, modalBorder);
+    /**
+     * Muestra el modal de cliente usando el nuevo sistema
+     * Animación de derecha a izquierda
+     */
+    private void showClienteModal(Cliente clienteEditar) {
+        // Crear opciones del modal con animación de derecha a izquierda
+        ModalOption option = ModalOption.getDefault()
+            .setHorizontalPosition(ModalOption.Position.RIGHT)
+            .setVerticalPosition(ModalOption.Position.CENTER)
+            .setAnimationDirection(ModalOption.AnimationDirection.RIGHT_TO_LEFT)
+            .setAnimationEnabled(true)
+            .setDuration(350)
+            .setMargin(0)
+            .setPadding(0)
+            .setRoundness(0)
+            .setCloseOnEscape(true)
+            .setCloseOnClickOutside(false);
+        
+        // Crear el modal con callback
+        ClienteModal modal = new ClienteModal(clienteEditar, cliente -> {
+            loadData();
+            String mensaje = clienteEditar == null ? 
+                "Cliente registrado exitosamente" : 
+                "Cliente actualizado exitosamente";
+            Toast.show(this, Toast.Type.SUCCESS, mensaje);
+        });
+        
+        // Mostrar el modal
+        ModalManager.showModal(this, modal, option);
     }
 
+    /**
+     * Elimina el cliente seleccionado con confirmación
+     */
     private void deleteSelected() {
         int row = table.getSelectedRow();
         if (row == -1) {
@@ -190,35 +175,28 @@ public class ClientesView extends JPanel {
         int id = (int) table.getValueAt(row, 0);
         String nombre = (String) table.getValueAt(row, 2);
 
-        // Crear mensaje de confirmación
-        JPanel msgPanel = new JPanel(new MigLayout("fill, insets 20", "[center]", "[]10[]"));
-        JLabel icon = new JLabel(UIManager.getIcon("OptionPane.warningIcon"));
-        JLabel msg = new JLabel("<html><center>¿Estás seguro de eliminar a<br><b>" + nombre + "</b>?<br><br>Esta acción no se puede deshacer.</center></html>");
-        msg.setHorizontalAlignment(SwingConstants.CENTER);
-        msgPanel.add(icon, "wrap");
-        msgPanel.add(msg, "grow");
-        
-        SimpleModalBorder modalBorder = new SimpleModalBorder(
-            msgPanel,
+        int confirm = JOptionPane.showConfirmDialog(
+            this,
+            "¿Estás seguro de eliminar a " + nombre + "?\nEsta acción no se puede deshacer.",
             "Confirmar Eliminación",
-            SimpleModalBorder.YES_NO_OPTION,
-            (controller, action) -> {
-                if (action == SimpleModalBorder.YES_OPTION) {
-                    try {
-                        repository.delete(id);
-                        Toast.show(this, Toast.Type.SUCCESS, "Cliente eliminado correctamente");
-                        loadData();
-                    } catch (Exception e) {
-                        Toast.show(this, Toast.Type.ERROR, "Error al eliminar: " + e.getMessage());
-                    }
-                }
-                controller.close();
-            }
+            JOptionPane.YES_NO_OPTION,
+            JOptionPane.WARNING_MESSAGE
         );
         
-        ModalDialog.showModal(this, modalBorder);
+        if (confirm == JOptionPane.YES_OPTION) {
+            try {
+                repository.delete(id);
+                Toast.show(this, Toast.Type.SUCCESS, "Cliente eliminado correctamente");
+                loadData();
+            } catch (Exception e) {
+                Toast.show(this, Toast.Type.ERROR, "Error al eliminar: " + e.getMessage());
+            }
+        }
     }
     
+    /**
+     * Edita el cliente seleccionado
+     */
     private void editSelected() {
         int row = table.getSelectedRow();
         if (row == -1) {
@@ -233,7 +211,7 @@ public class ClientesView extends JPanel {
                 .orElse(null);
         
         if (seleccionado != null) {
-            showClienteForm(seleccionado);
+            showClienteModal(seleccionado);
         } else {
             Toast.show(this, Toast.Type.ERROR, "Error: No se encontró el cliente seleccionado");
         }

@@ -62,7 +62,6 @@
             <artifactId>miglayout-swing</artifactId>
             <version>5.3</version>
         </dependency>
-        <!-- Modal Dialog - versión SNAPSHOT correcta -->
         <dependency>
             <groupId>io.github.dj-raven</groupId>
             <artifactId>modal-dialog</artifactId>
