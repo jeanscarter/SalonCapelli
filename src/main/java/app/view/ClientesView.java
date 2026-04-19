@@ -1,7 +1,6 @@
 package app.view;
 
 import app.exception.DatabaseException;
-import app.exception.cliente.ClienteException;
 import app.exception.cliente.ClienteNotFoundException;
 import app.model.Cliente;
 import app.option.ModalOption;
@@ -25,11 +24,11 @@ import java.util.List;
 public class ClientesView extends JPanel {
 
     private static final Logger logger = LoggerFactory.getLogger(ClientesView.class);
-    
+
     private final ClienteRepository repository;
     private JTable table;
     private DefaultTableModel tableModel;
-    private List<Cliente> listaClientesCache; 
+    private List<Cliente> listaClientesCache;
     private JTextField txtSearch;
     private Timer searchTimer;
 
@@ -37,7 +36,7 @@ public class ClientesView extends JPanel {
         logger.info("Inicializando ClientesView");
         this.repository = new ClienteRepositorySQLite();
         init();
-        loadData(); 
+        loadData();
         logger.debug("✓ ClientesView inicializada");
     }
 
@@ -45,7 +44,7 @@ public class ClientesView extends JPanel {
         setLayout(new MigLayout("fill, insets 20", "[grow]", "[][grow]"));
 
         JPanel toolbar = new JPanel(new MigLayout("insets 0, fillx", "[]push[]5[]5[]5[]"));
-        
+
         JLabel title = new JLabel("Gestión de Clientes");
         title.putClientProperty(FlatClientProperties.STYLE, "font:bold +10");
         toolbar.add(title);
@@ -64,7 +63,7 @@ public class ClientesView extends JPanel {
         JButton cmdAdd = createToolButton("icons/add.svg", "Nuevo Cliente", "$Component.accentColor", "#fff");
         cmdAdd.addActionListener(e -> showClienteModal(null));
         toolbar.add(cmdAdd);
-        
+
         JButton cmdEdit = createToolButton("icons/edit.svg", "Editar Selección", null, null);
         cmdEdit.addActionListener(e -> editSelected());
         toolbar.add(cmdEdit);
@@ -75,16 +74,18 @@ public class ClientesView extends JPanel {
 
         add(toolbar, "growx, wrap");
 
-        String[] columnNames = {"ID", "Cédula", "Nombre", "Teléfono", "Tipo Cabello", "Extensiones"};
+        String[] columnNames = { "ID", "Cédula", "Nombre", "Teléfono", "Tipo Cabello", "Extensiones" };
         tableModel = new DefaultTableModel(columnNames, 0) {
             @Override
-            public boolean isCellEditable(int row, int column) { return false; }
+            public boolean isCellEditable(int row, int column) {
+                return false;
+            }
         };
-        
+
         table = new JTable(tableModel);
-        table.setRowHeight(40); 
+        table.setRowHeight(40);
         table.getTableHeader().putClientProperty(FlatClientProperties.STYLE, "font:bold");
-        
+
         JPopupMenu popup = new JPopupMenu();
         JMenuItem itemEdit = new JMenuItem("Editar Cliente");
         itemEdit.addActionListener(e -> editSelected());
@@ -97,80 +98,81 @@ public class ClientesView extends JPanel {
         JScrollPane scroll = new JScrollPane(table);
         scroll.putClientProperty(FlatClientProperties.STYLE, "border:0,0,0,0");
         add(scroll, "grow");
-        
+
         logger.debug("✓ Componentes UI creados");
     }
-   
+
     private JButton createToolButton(String iconPath, String tooltip, String bgColor, String fgColor) {
         JButton btn = new JButton();
         btn.setIcon(new FlatSVGIcon(iconPath, 20, 20));
         btn.setToolTipText(tooltip);
         String style = "arc:10; margin:5,10,5,10;";
-        if (bgColor != null) style += "background:" + bgColor + ";";
-        if (fgColor != null) style += "foreground:" + fgColor + ";";
+        if (bgColor != null)
+            style += "background:" + bgColor + ";";
+        if (fgColor != null)
+            style += "foreground:" + fgColor + ";";
         btn.putClientProperty(FlatClientProperties.STYLE, style);
         return btn;
     }
 
     private void loadData() {
         logger.info("Cargando lista de clientes");
-        
+
         try {
             listaClientesCache = repository.findAll();
-            filterData(""); 
-            
+            filterData("");
+
             logger.info("✓ Cargados {} clientes", listaClientesCache.size());
-            
+
         } catch (DatabaseException e) {
             logger.error("Error cargando clientes: {}", e.getMessage(), e);
             // ✅ Toast de error
             ToastNotification.showError(
-                this,
-                "Error al Cargar",
-                "No se pudieron cargar los clientes: " + e.getMessage()
-            );
+                    this,
+                    "Error al Cargar",
+                    "No se pudieron cargar los clientes: " + e.getMessage());
             listaClientesCache = List.of();
         }
     }
 
     private void filterData(String query) {
         logger.debug("Filtrando clientes con query: '{}'", query);
-        
-        tableModel.setRowCount(0); 
-        
+
+        tableModel.setRowCount(0);
+
         if (listaClientesCache == null || listaClientesCache.isEmpty()) {
             logger.debug("Cache vacío, no hay datos para filtrar");
             return;
         }
-        
+
         String q = query.toLowerCase().trim();
         int count = 0;
-        
+
         for (Cliente c : listaClientesCache) {
-            if (q.isEmpty() || 
-                c.getNombreCompleto().toLowerCase().contains(q) || 
-                (c.getCedula() != null && c.getCedula().toLowerCase().contains(q))) {
-                
-                tableModel.addRow(new Object[]{
-                    c.getId(), 
-                    c.getCedula(), 
-                    c.getNombreCompleto(), 
-                    c.getTelefono(), 
-                    c.getTipoCabello(), 
-                    c.getTipoExtensiones()
+            if (q.isEmpty() ||
+                    c.getNombreCompleto().toLowerCase().contains(q) ||
+                    (c.getCedula() != null && c.getCedula().toLowerCase().contains(q))) {
+
+                tableModel.addRow(new Object[] {
+                        c.getId(),
+                        c.getCedula(),
+                        c.getNombreCompleto(),
+                        c.getTelefono(),
+                        c.getTipoCabello(),
+                        c.getTipoExtensiones()
                 });
                 count++;
             }
         }
-        
+
         logger.debug("✓ Filtrados {} clientes", count);
     }
-    
+
     private void scheduleSearch() {
         if (searchTimer != null) {
             searchTimer.stop();
         }
-        
+
         searchTimer = new Timer(300, e -> {
             String query = txtSearch.getText();
             logger.debug("Ejecutando búsqueda programada: '{}'", query);
@@ -183,25 +185,25 @@ public class ClientesView extends JPanel {
     private void showClienteModal(Cliente clienteEditar) {
         String accion = clienteEditar == null ? "crear" : "editar";
         logger.info("Abriendo modal para {} cliente", accion);
-        
+
         ModalOption option = ModalOption.getDefault()
-            .setHorizontalPosition(ModalOption.Position.RIGHT)
-            .setVerticalPosition(ModalOption.Position.CENTER)
-            .setAnimationDirection(ModalOption.AnimationDirection.RIGHT_TO_LEFT)
-            .setAnimationEnabled(true)
-            .setDuration(350)
-            .setMargin(0)
-            .setPadding(0)
-            .setRoundness(0)
-            .setCloseOnEscape(true)
-            .setCloseOnClickOutside(false);
-        
+                .setHorizontalPosition(ModalOption.Position.RIGHT)
+                .setVerticalPosition(ModalOption.Position.CENTER)
+                .setAnimationDirection(ModalOption.AnimationDirection.RIGHT_TO_LEFT)
+                .setAnimationEnabled(true)
+                .setDuration(350)
+                .setMargin(0)
+                .setPadding(0)
+                .setRoundness(0)
+                .setCloseOnEscape(true)
+                .setCloseOnClickOutside(false);
+
         ClienteModal modal = new ClienteModal(clienteEditar, cliente -> {
             logger.info("Callback: Cliente guardado exitosamente");
             loadData();
             // ✅ El Toast ya se muestra en el modal, no duplicar aquí
         });
-        
+
         ModalManager.showModal(this, modal, option);
     }
 
@@ -213,70 +215,65 @@ public class ClientesView extends JPanel {
             ToastNotification.showInfo(this, "Seleccione un cliente de la tabla para eliminar");
             return;
         }
-        
+
         int id = (int) table.getValueAt(row, 0);
         String nombre = (String) table.getValueAt(row, 2);
         String cedula = (String) table.getValueAt(row, 1);
-        
+
         logger.info("Solicitando confirmación para eliminar cliente ID: {} - {}", id, nombre);
 
         int confirm = JOptionPane.showConfirmDialog(
-            this,
-            String.format("¿Está seguro de eliminar a %s (Cédula: %s)?\n\nEsta acción no se puede deshacer.", 
-                nombre, cedula),
-            "Confirmar Eliminación",
-            JOptionPane.YES_NO_OPTION,
-            JOptionPane.WARNING_MESSAGE
-        );
-        
+                this,
+                String.format("¿Está seguro de eliminar a %s (Cédula: %s)?\n\nEsta acción no se puede deshacer.",
+                        nombre, cedula),
+                "Confirmar Eliminación",
+                JOptionPane.YES_NO_OPTION,
+                JOptionPane.WARNING_MESSAGE);
+
         if (confirm == JOptionPane.YES_OPTION) {
             logger.info("Usuario confirmó eliminación");
-            
+
             try {
                 repository.delete(id);
-                
+
                 logger.info("✓ Cliente eliminado: ID {} - {}", id, nombre);
                 // ✅ Toast de éxito
                 ToastNotification.showSuccess(
-                    this,
-                    "Cliente Eliminado",
-                    "El cliente ha sido eliminado correctamente"
-                );
+                        this,
+                        "Cliente Eliminado",
+                        "El cliente ha sido eliminado correctamente");
                 loadData();
-                
+
             } catch (ClienteNotFoundException e) {
                 logger.warn("Cliente no encontrado al intentar eliminar: {}", e.getMessage());
                 // ✅ Toast de advertencia
                 ToastNotification.showWarning(
-                    this,
-                    "Cliente No Encontrado",
-                    "El cliente ya no existe. Recargando lista..."
-                );
+                        this,
+                        "Cliente No Encontrado",
+                        "El cliente ya no existe. Recargando lista...");
                 loadData();
-                
+
             } catch (DatabaseException e) {
                 logger.error("Error al eliminar cliente: {}", e.getMessage(), e);
                 // ✅ Toast de error
                 ToastNotification.showError(
-                    this,
-                    "Error al Eliminar",
-                    "No se pudo eliminar el cliente: " + e.getMessage()
-                );
-                
+                        this,
+                        "Error al Eliminar",
+                        "No se pudo eliminar el cliente: " + e.getMessage());
+
             } catch (Exception e) {
                 logger.error("Error inesperado al eliminar cliente", e);
                 // ✅ Toast de error
                 ToastNotification.showError(
-                    this,
-                    "Error Inesperado",
-                    "Ocurrió un error inesperado al eliminar el cliente"
-                );
+                        this,
+                        "Error Inesperado",
+                        "Ocurrió un error inesperado al eliminar el cliente");
             }
         } else {
             logger.debug("Usuario canceló la eliminación");
         }
     }
-    
+
     private void editSelected() {
         int row = table.getSelectedRow();
         if (row == -1) {
@@ -285,25 +282,24 @@ public class ClientesView extends JPanel {
             ToastNotification.showInfo(this, "Seleccione un cliente de la tabla para editar");
             return;
         }
-        
-        int id = (int) table.getValueAt(row, 0); 
+
+        int id = (int) table.getValueAt(row, 0);
         logger.info("Editando cliente ID: {}", id);
-        
+
         Cliente seleccionado = listaClientesCache.stream()
                 .filter(c -> c.getId() == id)
                 .findFirst()
                 .orElse(null);
-        
+
         if (seleccionado != null) {
             showClienteModal(seleccionado);
         } else {
             logger.error("Cliente ID {} no encontrado en caché", id);
             // ✅ Toast de error
             ToastNotification.showError(
-                this,
-                "Error",
-                "No se encontró el cliente. Recargando lista..."
-            );
+                    this,
+                    "Error",
+                    "No se encontró el cliente. Recargando lista...");
             loadData();
         }
     }

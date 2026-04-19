@@ -5,8 +5,6 @@ import raven.modal.option.LayoutOption;
 import raven.modal.option.Location;
 import raven.modal.option.Option;
 
-import java.awt.*;
-
 /**
  * Clase de opciones para configurar modales
  * Patrón: Builder + Fluent Interface

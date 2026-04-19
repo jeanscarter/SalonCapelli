@@ -8,7 +8,7 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.function.Supplier;
 import javax.swing.*;
-import raven.modal.Drawer;
+
 import raven.modal.drawer.item.Item;
 import raven.modal.drawer.item.MenuItem;
 import raven.modal.drawer.menu.MenuAction;
@@ -36,9 +36,9 @@ public class MyDrawerBuilder extends SimpleDrawerBuilder {
             }
         } catch (Exception e) {
         }
-        
+
         return new SimpleHeaderData()
-                .setIcon(headerIcon) 
+                .setIcon(headerIcon)
                 .setTitle("Salón de Belleza Capelli")
                 .setDescription("Dashboard v1.0");
     }
@@ -51,7 +51,7 @@ public class MyDrawerBuilder extends SimpleDrawerBuilder {
     }
 
     private static MenuOption createMenuOption(FormManager formManager) {
-        
+
         Map<String, Supplier<Component>> navigationMap = new HashMap<>();
         navigationMap.put("Ventas por Día", () -> new JLabel("VISTA: Ventas por Día"));
         navigationMap.put("Reporte Semanal", () -> new JLabel("VISTA: Reporte Semanal"));
@@ -62,20 +62,20 @@ public class MyDrawerBuilder extends SimpleDrawerBuilder {
         navigationMap.put("Calcular Nómina", () -> new JLabel("VISTA: Cálculo de Nómina"));
         navigationMap.put("Facturación", () -> new JLabel("VISTA: Facturación"));
 
-        MenuItem[] items = new MenuItem[]{
-            new Item.Label("REPORTES"),
-            new Item("Ventas por Día"),
-            new Item("Reporte Semanal"),
-            
-            new Item.Label("GESTIÓN"),
-            new Item("Clientes"),
-            new Item("Trabajadoras"),
-            new Item("Servicios"),
-            
-            new Item.Label("FINANZAS"),
-            new Item("Comisiones"),
-            new Item("Calcular Nómina"),
-            new Item("Facturación")
+        MenuItem[] items = new MenuItem[] {
+                new Item.Label("REPORTES"),
+                new Item("Ventas por Día"),
+                new Item("Reporte Semanal"),
+
+                new Item.Label("GESTIÓN"),
+                new Item("Clientes"),
+                new Item("Trabajadoras"),
+                new Item("Servicios"),
+
+                new Item.Label("FINANZAS"),
+                new Item("Comisiones"),
+                new Item("Calcular Nómina"),
+                new Item("Facturación")
         };
 
         MenuOption option = new MenuOption();
@@ -85,9 +85,9 @@ public class MyDrawerBuilder extends SimpleDrawerBuilder {
             @Override
             public void selected(MenuAction action, int[] index) {
                 String itemTitle = action.getItem().getName();
-                
+
                 Supplier<Component> viewFactory = navigationMap.get(itemTitle);
-                
+
                 if (viewFactory != null) {
                     formManager.showForm(viewFactory.get());
                 } else {

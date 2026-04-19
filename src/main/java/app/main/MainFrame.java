@@ -5,7 +5,7 @@ import app.system.FormManager;
 import com.formdev.flatlaf.FlatClientProperties;
 import com.formdev.flatlaf.extras.FlatSVGIcon;
 import java.awt.BorderLayout;
-import java.awt.Insets;
+
 import java.net.URL;
 import javax.swing.ImageIcon;
 import javax.swing.JButton;
@@ -18,7 +18,7 @@ import javax.swing.WindowConstants;
 import raven.modal.Drawer;
 
 public class MainFrame extends JFrame {
-    
+
     private FormManager formManager;
     private JPanel body;
 
@@ -29,7 +29,7 @@ public class MainFrame extends JFrame {
     private void init() {
         setTitle("Capelli Sales Dashboard");
         setDefaultCloseOperation(WindowConstants.EXIT_ON_CLOSE);
-        
+
         try {
             URL imgURL = getClass().getResource("/images/CapelliPng.png");
             if (imgURL != null) {
@@ -41,18 +41,18 @@ public class MainFrame extends JFrame {
 
         setExtendedState(JFrame.MAXIMIZED_BOTH);
         setLocationRelativeTo(null);
-        
+
         JPanel contentPane = new JPanel(new BorderLayout());
         contentPane.putClientProperty(FlatClientProperties.STYLE, "background:$Main.background");
         setContentPane(contentPane);
 
         // Toolbar
         JToolBar toolbar = new JToolBar();
-        
+
         JButton cmdMenu = new JButton();
-        cmdMenu.setIcon(new FlatSVGIcon("icons/menu.svg")); 
+        cmdMenu.setIcon(new FlatSVGIcon("icons/menu.svg"));
         cmdMenu.addActionListener(e -> Drawer.showDrawer());
-        
+
         toolbar.add(cmdMenu);
         contentPane.add(toolbar, BorderLayout.NORTH);
 
@@ -65,7 +65,7 @@ public class MainFrame extends JFrame {
 
         // 2. Instalar Drawer - Usamos el layout responsivo por defecto
         Drawer.installDrawer(this, new MyDrawerBuilder(formManager));
-        
+
         // Vista inicial
         formManager.showForm(new JLabel("Bienvenido al Sistema Capelli", SwingConstants.CENTER));
     }
