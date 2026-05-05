@@ -56,8 +56,8 @@ public class MyDrawerBuilder extends SimpleDrawerBuilder {
         navigationMap.put("Ventas por Día", () -> new JLabel("VISTA: Ventas por Día"));
         navigationMap.put("Reporte Semanal", () -> new JLabel("VISTA: Reporte Semanal"));
         navigationMap.put("Clientes", () -> new app.view.ClientesView());
-        navigationMap.put("Trabajadoras", () -> new JLabel("VISTA: Gestión de Trabajadoras"));
-        navigationMap.put("Servicios", () -> new JLabel("VISTA: Catálogo de Servicios"));
+        navigationMap.put("Trabajadoras", () -> new app.view.TrabajadorasView());
+        navigationMap.put("Servicios", () -> new app.view.ServiciosView());
         navigationMap.put("Comisiones", () -> new JLabel("VISTA: Configuración Comisiones"));
         navigationMap.put("Calcular Nómina", () -> new JLabel("VISTA: Cálculo de Nómina"));
         navigationMap.put("Facturación", () -> new JLabel("VISTA: Facturación"));

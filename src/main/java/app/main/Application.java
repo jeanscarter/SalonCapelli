@@ -1,4 +1,4 @@
-package app.main;
+package app.main; // Trigger rebuild
 
 import app.db.DatabaseConnection;
 import app.exception.DatabaseException;

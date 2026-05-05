@@ -108,14 +108,66 @@ public class DatabaseConnection {
                 CREATE INDEX IF NOT EXISTS idx_clientes_nombre ON clientes(nombre_completo);
                 """;
 
+        String sqlTrabajadoras = """
+                CREATE TABLE IF NOT EXISTS trabajadoras (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    cedula TEXT UNIQUE NOT NULL,
+                    nombres TEXT NOT NULL,
+                    apellidos TEXT NOT NULL,
+                    telefono TEXT,
+                    correo TEXT,
+                    foto BLOB,
+                    bono_activo INTEGER DEFAULT 0,
+                    monto_bono REAL DEFAULT 0.0,
+                    razon_bono TEXT DEFAULT '',
+                    fecha_creacion TEXT DEFAULT CURRENT_TIMESTAMP
+                );
+
+                CREATE INDEX IF NOT EXISTS idx_trabajadoras_cedula ON trabajadoras(cedula);
+                CREATE INDEX IF NOT EXISTS idx_trabajadoras_nombre ON trabajadoras(nombres, apellidos);
+
+                CREATE TABLE IF NOT EXISTS cuentas_bancarias (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    trabajadora_id INTEGER NOT NULL,
+                    banco TEXT NOT NULL,
+                    tipo_cuenta TEXT NOT NULL,
+                    numero_cuenta TEXT NOT NULL,
+                    es_principal INTEGER DEFAULT 0,
+                    FOREIGN KEY (trabajadora_id) REFERENCES trabajadoras(id) ON DELETE CASCADE
+                );
+
+                CREATE INDEX IF NOT EXISTS idx_cuentas_trabajadora ON cuentas_bancarias(trabajadora_id);
+                """;
+
+        String sqlServicios = """
+                CREATE TABLE IF NOT EXISTS servicios (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    nombre TEXT NOT NULL,
+                    categoria TEXT,
+                    precio_corto REAL DEFAULT 0.0,
+                    precio_mediano REAL DEFAULT 0.0,
+                    precio_largo REAL DEFAULT 0.0,
+                    precio_extensiones REAL DEFAULT 0.0,
+                    permite_cliente_producto INTEGER DEFAULT 0,
+                    precio_cliente_producto REAL DEFAULT 0.0,
+                    is_active INTEGER DEFAULT 1,
+                    fecha_creacion TEXT DEFAULT CURRENT_TIMESTAMP
+                );
+
+                CREATE INDEX IF NOT EXISTS idx_servicios_nombre ON servicios(nombre);
+                CREATE INDEX IF NOT EXISTS idx_servicios_active ON servicios(is_active);
+                """;
+
         try (Connection conn = connect();
              Statement stmt = conn.createStatement()) {
             
             logger.debug("Ejecutando script de creación de tablas");
             stmt.execute(sql);
+            stmt.execute(sqlTrabajadoras);
+            stmt.execute(sqlServicios);
             
             logger.info("✓ Base de datos SQLite inicializada correctamente");
-            logger.info("✓ Tabla 'clientes' verificada/creada");
+            logger.info("✓ Tablas verificadas/creadas: clientes, trabajadoras, cuentas_bancarias, servicios");
             logger.info("✓ Índices creados/verificados");
             
         } catch (SQLException e) {
