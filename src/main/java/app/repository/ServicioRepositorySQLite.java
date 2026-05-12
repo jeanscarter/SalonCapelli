@@ -6,7 +6,6 @@ import app.exception.servicio.ServicioException;
 import app.exception.servicio.ServicioNotFoundException;
 import app.model.CategoriaServicio;
 import app.model.Servicio;
-import app.model.TipoCabello;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 

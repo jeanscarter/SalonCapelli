@@ -58,7 +58,7 @@ public class MyDrawerBuilder extends SimpleDrawerBuilder {
         navigationMap.put("Clientes", () -> new app.view.ClientesView());
         navigationMap.put("Trabajadoras", () -> new app.view.TrabajadorasView());
         navigationMap.put("Servicios", () -> new app.view.ServiciosView());
-        navigationMap.put("Comisiones", () -> new JLabel("VISTA: Configuración Comisiones"));
+        navigationMap.put("Comisiones", () -> new app.view.ComisionesView());
         navigationMap.put("Calcular Nómina", () -> new JLabel("VISTA: Cálculo de Nómina"));
         navigationMap.put("Facturación", () -> new JLabel("VISTA: Facturación"));
 

@@ -20,3 +20,5 @@ dependency-reduced-pom.xml
 *.log
 *.tmp
 /salon_capelli.db
+salon_capelli.db-wal
+salon_capelli.db-shm

@@ -86,7 +86,7 @@ public class DatabaseConnection {
     public static void initDatabase() throws DatabaseException {
         logger.info("Iniciando proceso de inicialización de la base de datos");
         
-        String sql = """
+        String sqlClientes1 = """
                 CREATE TABLE IF NOT EXISTS clientes (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
                     cedula TEXT UNIQUE NOT NULL,
@@ -102,13 +102,12 @@ public class DatabaseConnection {
                     fecha_ultimo_mantenimiento TEXT,
                     fecha_creacion TEXT DEFAULT CURRENT_TIMESTAMP,
                     fecha_modificacion TEXT DEFAULT CURRENT_TIMESTAMP
-                );
+                );""";
                 
-                CREATE INDEX IF NOT EXISTS idx_clientes_cedula ON clientes(cedula);
-                CREATE INDEX IF NOT EXISTS idx_clientes_nombre ON clientes(nombre_completo);
-                """;
+        String sqlClientes2 = "CREATE INDEX IF NOT EXISTS idx_clientes_cedula ON clientes(cedula);";
+        String sqlClientes3 = "CREATE INDEX IF NOT EXISTS idx_clientes_nombre ON clientes(nombre_completo);";
 
-        String sqlTrabajadoras = """
+        String sqlTrabajadoras1 = """
                 CREATE TABLE IF NOT EXISTS trabajadoras (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
                     cedula TEXT UNIQUE NOT NULL,
@@ -121,11 +120,12 @@ public class DatabaseConnection {
                     monto_bono REAL DEFAULT 0.0,
                     razon_bono TEXT DEFAULT '',
                     fecha_creacion TEXT DEFAULT CURRENT_TIMESTAMP
-                );
+                );""";
 
-                CREATE INDEX IF NOT EXISTS idx_trabajadoras_cedula ON trabajadoras(cedula);
-                CREATE INDEX IF NOT EXISTS idx_trabajadoras_nombre ON trabajadoras(nombres, apellidos);
+        String sqlTrabajadoras2 = "CREATE INDEX IF NOT EXISTS idx_trabajadoras_cedula ON trabajadoras(cedula);";
+        String sqlTrabajadoras3 = "CREATE INDEX IF NOT EXISTS idx_trabajadoras_nombre ON trabajadoras(nombres, apellidos);";
 
+        String sqlCuentas1 = """
                 CREATE TABLE IF NOT EXISTS cuentas_bancarias (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
                     trabajadora_id INTEGER NOT NULL,
@@ -134,12 +134,11 @@ public class DatabaseConnection {
                     numero_cuenta TEXT NOT NULL,
                     es_principal INTEGER DEFAULT 0,
                     FOREIGN KEY (trabajadora_id) REFERENCES trabajadoras(id) ON DELETE CASCADE
-                );
+                );""";
 
-                CREATE INDEX IF NOT EXISTS idx_cuentas_trabajadora ON cuentas_bancarias(trabajadora_id);
-                """;
+        String sqlCuentas2 = "CREATE INDEX IF NOT EXISTS idx_cuentas_trabajadora ON cuentas_bancarias(trabajadora_id);";
 
-        String sqlServicios = """
+        String sqlServicios1 = """
                 CREATE TABLE IF NOT EXISTS servicios (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
                     nombre TEXT NOT NULL,
@@ -152,22 +151,47 @@ public class DatabaseConnection {
                     precio_cliente_producto REAL DEFAULT 0.0,
                     is_active INTEGER DEFAULT 1,
                     fecha_creacion TEXT DEFAULT CURRENT_TIMESTAMP
-                );
+                );""";
 
-                CREATE INDEX IF NOT EXISTS idx_servicios_nombre ON servicios(nombre);
-                CREATE INDEX IF NOT EXISTS idx_servicios_active ON servicios(is_active);
-                """;
+        String sqlServicios2 = "CREATE INDEX IF NOT EXISTS idx_servicios_nombre ON servicios(nombre);";
+        String sqlServicios3 = "CREATE INDEX IF NOT EXISTS idx_servicios_active ON servicios(is_active);";
+
+        String sqlComisiones1 = """
+                CREATE TABLE IF NOT EXISTS reglas_comision (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    trabajadora_id INTEGER NOT NULL,
+                    categoria_servicio TEXT NOT NULL,
+                    porcentaje_comision REAL DEFAULT 0.0,
+                    FOREIGN KEY (trabajadora_id) REFERENCES trabajadoras(id) ON DELETE CASCADE,
+                    UNIQUE(trabajadora_id, categoria_servicio)
+                );""";
+        
+        String sqlComisiones2 = "CREATE INDEX IF NOT EXISTS idx_reglas_comision_trabajadora ON reglas_comision(trabajadora_id);";
 
         try (Connection conn = connect();
              Statement stmt = conn.createStatement()) {
             
             logger.debug("Ejecutando script de creación de tablas");
-            stmt.execute(sql);
-            stmt.execute(sqlTrabajadoras);
-            stmt.execute(sqlServicios);
+            stmt.execute(sqlClientes1);
+            stmt.execute(sqlClientes2);
+            stmt.execute(sqlClientes3);
+            
+            stmt.execute(sqlTrabajadoras1);
+            stmt.execute(sqlTrabajadoras2);
+            stmt.execute(sqlTrabajadoras3);
+            
+            stmt.execute(sqlCuentas1);
+            stmt.execute(sqlCuentas2);
+            
+            stmt.execute(sqlServicios1);
+            stmt.execute(sqlServicios2);
+            stmt.execute(sqlServicios3);
+            
+            stmt.execute(sqlComisiones1);
+            stmt.execute(sqlComisiones2);
             
             logger.info("✓ Base de datos SQLite inicializada correctamente");
-            logger.info("✓ Tablas verificadas/creadas: clientes, trabajadoras, cuentas_bancarias, servicios");
+            logger.info("✓ Tablas verificadas/creadas: clientes, trabajadoras, cuentas_bancarias, servicios, reglas_comision");
             logger.info("✓ Índices creados/verificados");
             
         } catch (SQLException e) {
