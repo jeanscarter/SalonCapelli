@@ -14,20 +14,21 @@ import java.sql.Statement;
  * Patrón: Singleton + Lazy Initialization
  * 
  * Esquema completo:
- *   - clientes              (Módulo Clientes)
- *   - trabajadoras           (Módulo Trabajadoras)
- *   - cuentas_bancarias      (Módulo Trabajadoras - Cuentas)
- *   - servicios              (Módulo Servicios)
- *   - reglas_comision         (Comisiones simples por categoría - LEGACY compat)
- *   - reglas_comision_detalladas (Comisiones avanzadas - reemplaza PayrollService hardcoded)
- *   - marcas                 (Módulo Inventario)
- *   - productos              (Módulo Inventario)
- *   - inventario_movimientos  (Módulo Inventario - Auditoría)
- *   - ventas                 (Módulo Transaccional)
- *   - venta_items            (Módulo Transaccional)
- *   - venta_pagos            (Módulo Transaccional)
- *   - propinas               (Módulo Transaccional)
- *   - app_settings           (Configuración)
+ * - clientes (Módulo Clientes)
+ * - trabajadoras (Módulo Trabajadoras)
+ * - cuentas_bancarias (Módulo Trabajadoras - Cuentas)
+ * - servicios (Módulo Servicios)
+ * - reglas_comision (Comisiones simples por categoría - LEGACY compat)
+ * - reglas_comision_detalladas (Comisiones avanzadas - reemplaza PayrollService
+ * hardcoded)
+ * - marcas (Módulo Inventario)
+ * - productos (Módulo Inventario)
+ * - inventario_movimientos (Módulo Inventario - Auditoría)
+ * - ventas (Módulo Transaccional)
+ * - venta_items (Módulo Transaccional)
+ * - venta_pagos (Módulo Transaccional)
+ * - propinas (Módulo Transaccional)
+ * - app_settings (Configuración)
  */
 public class DatabaseConnection {
 
@@ -35,7 +36,7 @@ public class DatabaseConnection {
     private static final String URL = "jdbc:sqlite:salon_capelli.db";
     private static volatile Connection instance;
     private static final Object lock = new Object();
-    
+
     // Bandera para saber si ya se inicializó el driver
     private static boolean driverLoaded = false;
 
@@ -62,10 +63,9 @@ public class DatabaseConnection {
     public static Connection connect() throws DatabaseException {
         if (!driverLoaded) {
             throw DatabaseException.connectionFailed(
-                new IllegalStateException("Driver SQLite no está cargado")
-            );
+                    new IllegalStateException("Driver SQLite no está cargado"));
         }
-        
+
         try {
             if (instance == null || instance.isClosed()) {
                 synchronized (lock) {
@@ -73,21 +73,21 @@ public class DatabaseConnection {
                         logger.debug("Creando nueva conexión a la base de datos: {}", URL);
                         instance = DriverManager.getConnection(URL);
                         instance.setAutoCommit(true);
-                        
+
                         // Configuraciones de SQLite para mejor rendimiento
                         try (Statement stmt = instance.createStatement()) {
-                            stmt.execute("PRAGMA journal_mode=WAL");  // Write-Ahead Logging
+                            stmt.execute("PRAGMA journal_mode=WAL"); // Write-Ahead Logging
                             stmt.execute("PRAGMA foreign_keys=ON");
                             stmt.execute("PRAGMA synchronous=NORMAL");
                             logger.debug("Configuraciones de SQLite aplicadas (WAL, FK, SYNC)");
                         }
-                        
+
                         logger.info("Conexión a la base de datos establecida exitosamente");
                     }
                 }
             }
             return instance;
-            
+
         } catch (SQLException e) {
             logger.error("Error al conectar con la base de datos: {}", e.getMessage(), e);
             throw DatabaseException.connectionFailed(e);
@@ -101,7 +101,7 @@ public class DatabaseConnection {
      */
     public static void initDatabase() throws DatabaseException {
         logger.info("Iniciando proceso de inicialización de la base de datos");
-        
+
         // =====================================================================
         // MÓDULO: CLIENTES
         // =====================================================================
@@ -124,7 +124,7 @@ public class DatabaseConnection {
                     fecha_creacion TEXT DEFAULT CURRENT_TIMESTAMP,
                     fecha_modificacion TEXT DEFAULT CURRENT_TIMESTAMP
                 )""";
-                
+
         String sqlClientes2 = "CREATE INDEX IF NOT EXISTS idx_clientes_cedula ON clientes(cedula)";
         String sqlClientes3 = "CREATE INDEX IF NOT EXISTS idx_clientes_nombre ON clientes(nombre_completo)";
 
@@ -199,7 +199,7 @@ public class DatabaseConnection {
                     FOREIGN KEY (trabajadora_id) REFERENCES trabajadoras(id) ON DELETE CASCADE,
                     UNIQUE(trabajadora_id, categoria_servicio)
                 )""";
-        
+
         String sqlComisiones2 = "CREATE INDEX IF NOT EXISTS idx_reglas_comision_trabajadora ON reglas_comision(trabajadora_id)";
 
         // =====================================================================
@@ -364,18 +364,18 @@ public class DatabaseConnection {
         // =====================================================================
 
         try (Connection conn = connect();
-             Statement stmt = conn.createStatement()) {
-            
+                Statement stmt = conn.createStatement()) {
+
             logger.debug("Ejecutando script de creación de tablas");
 
             // Clientes
             stmt.execute(sqlClientes1);
             stmt.execute(sqlClientes2);
             stmt.execute(sqlClientes3);
-            
+
             // Trabajadoras
             stmt.execute(sqlTrabajadoras1);
-            
+
             // Migraciones para DB legacy (CapelliSalesWindow -> SalonCapelli)
             try {
                 stmt.execute("ALTER TABLE trabajadoras RENAME COLUMN numero_ci TO cedula");
@@ -383,24 +383,39 @@ public class DatabaseConnection {
             } catch (SQLException e) {
                 // Ignorar si la columna no existe o ya se renombró
             }
-            try { stmt.execute("ALTER TABLE trabajadoras ADD COLUMN bono_activo INTEGER DEFAULT 0"); } catch (SQLException e) {}
-            try { stmt.execute("ALTER TABLE trabajadoras ADD COLUMN monto_bono REAL DEFAULT 0.0"); } catch (SQLException e) {}
-            try { stmt.execute("ALTER TABLE trabajadoras ADD COLUMN razon_bono TEXT DEFAULT ''"); } catch (SQLException e) {}
-            try { stmt.execute("ALTER TABLE trabajadoras ADD COLUMN metodo_pago_preferido TEXT DEFAULT 'BANCO'"); } catch (SQLException e) {}
-            try { stmt.execute("ALTER TABLE trabajadoras ADD COLUMN fecha_creacion TEXT DEFAULT CURRENT_TIMESTAMP"); } catch (SQLException e) {}
+            try {
+                stmt.execute("ALTER TABLE trabajadoras ADD COLUMN bono_activo INTEGER DEFAULT 0");
+            } catch (SQLException e) {
+            }
+            try {
+                stmt.execute("ALTER TABLE trabajadoras ADD COLUMN monto_bono REAL DEFAULT 0.0");
+            } catch (SQLException e) {
+            }
+            try {
+                stmt.execute("ALTER TABLE trabajadoras ADD COLUMN razon_bono TEXT DEFAULT ''");
+            } catch (SQLException e) {
+            }
+            try {
+                stmt.execute("ALTER TABLE trabajadoras ADD COLUMN metodo_pago_preferido TEXT DEFAULT 'BANCO'");
+            } catch (SQLException e) {
+            }
+            try {
+                stmt.execute("ALTER TABLE trabajadoras ADD COLUMN fecha_creacion TEXT DEFAULT CURRENT_TIMESTAMP");
+            } catch (SQLException e) {
+            }
 
             stmt.execute(sqlTrabajadoras2);
             stmt.execute(sqlTrabajadoras3);
-            
+
             // Cuentas Bancarias
             stmt.execute(sqlCuentas1);
             stmt.execute(sqlCuentas2);
-            
+
             // Servicios
             stmt.execute(sqlServicios1);
             stmt.execute(sqlServicios2);
             stmt.execute(sqlServicios3);
-            
+
             // Comisiones (Simple)
             stmt.execute(sqlComisiones1);
             stmt.execute(sqlComisiones2);
@@ -453,13 +468,13 @@ public class DatabaseConnection {
             // Inicializar configuración por defecto
             stmt.execute("INSERT OR IGNORE INTO app_settings (setting_key, setting_value) VALUES ('correlativo', '1')");
             stmt.execute("INSERT OR IGNORE INTO app_settings (setting_key, setting_value) VALUES ('tasa_bcv', '0.0')");
-            
+
             logger.info("✓ Base de datos SQLite inicializada correctamente");
             logger.info("✓ Tablas verificadas/creadas: clientes, trabajadoras, cuentas_bancarias, " +
                     "servicios, reglas_comision, reglas_comision_detalladas, marcas, productos, " +
                     "inventario_movimientos, ventas, venta_items, venta_pagos, propinas, app_settings");
             logger.info("✓ Índices creados/verificados");
-            
+
         } catch (SQLException e) {
             logger.error("Error crítico al inicializar la base de datos", e);
             throw DatabaseException.initializationFailed(e);
@@ -495,7 +510,7 @@ public class DatabaseConnection {
             return false;
         }
     }
-    
+
     /**
      * Hook para cerrar la conexión al finalizar la aplicación
      */
@@ -504,7 +519,7 @@ public class DatabaseConnection {
             logger.info("Ejecutando shutdown hook de la base de datos");
             close();
         }, "Database-Shutdown-Hook"));
-        
+
         logger.debug("Shutdown hook registrado para la base de datos");
     }
 }

@@ -10,10 +10,8 @@ import java.net.URL;
 import javax.swing.ImageIcon;
 import javax.swing.JButton;
 import javax.swing.JFrame;
-import javax.swing.JLabel;
 import javax.swing.JPanel;
 import javax.swing.JToolBar;
-import javax.swing.SwingConstants;
 import javax.swing.WindowConstants;
 import raven.modal.Drawer;
 
@@ -67,6 +65,6 @@ public class MainFrame extends JFrame {
         Drawer.installDrawer(this, new MyDrawerBuilder(formManager));
 
         // Vista inicial
-        formManager.showForm(new JLabel("Bienvenido al Sistema Capelli", SwingConstants.CENTER));
+        formManager.showForm(new app.view.HomeView());
     }
 }

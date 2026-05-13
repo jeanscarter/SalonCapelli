@@ -54,7 +54,40 @@ public class Application {
             FlatRobotoFont.install();
             logger.debug("✓ Fuente Roboto instalada");
             
-            // Registrar temas custom
+            // Configurar paletas dinámicas y UI (Coral y tema Light/Dark)
+            java.util.Map<String, String> customPalette = new java.util.HashMap<>();
+            
+            // Estructura y Bordes (Compartidos)
+            customPalette.put("Component.arc", "12");
+            customPalette.put("Button.arc", "14");
+            customPalette.put("TextComponent.arc", "10");
+            customPalette.put("Table.showHorizontalLines", "true");
+            customPalette.put("Table.showVerticalLines", "false");
+            customPalette.put("Table.rowHeight", "30");
+
+            // Modo Claro (Light)
+            customPalette.put("@background", "#FFFFFF");
+            customPalette.put("@control", "#F8F9FA");
+            customPalette.put("@accentColor", "#FF7F6F");
+            customPalette.put("Button.default.background", "#FF7F6F");
+            customPalette.put("@foreground", "#2D3436");
+            customPalette.put("Component.accentColor", "#FF7F6F");
+            customPalette.put("Success.color", "#00D29E");
+            customPalette.put("Error.color", "#FF4C4C");
+            
+            // Modo Oscuro (Dark)
+            customPalette.put("[dark]@background", "#121212");
+            customPalette.put("[dark]@control", "#1E1E1E");
+            customPalette.put("[dark]@accentColor", "#FF8B7D");
+            customPalette.put("[dark]Button.default.background", "#FF7F6F");
+            customPalette.put("[dark]@foreground", "#E0E0E0");
+            customPalette.put("[dark]Component.accentColor", "#FF8B7D");
+            customPalette.put("[dark]Success.color", "#00D29E");
+            customPalette.put("[dark]Error.color", "#FF4C4C");
+
+            FlatLaf.setGlobalExtraDefaults(customPalette);
+
+            // Registrar temas custom de la librería Drawer
             FlatLaf.registerCustomDefaultsSource("raven.modal.demo.themes");
             logger.debug("✓ Temas personalizados registrados");
             

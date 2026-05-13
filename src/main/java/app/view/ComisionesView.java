@@ -1,11 +1,10 @@
 package app.view;
 
 import app.exception.DatabaseException;
-import app.model.ReglaComision;
+import app.model.ReglaComisionDetallada;
 import app.option.ModalOption;
-import app.repository.ReglaComisionRepository;
-import app.repository.ReglaComisionRepositorySQLite;
-import app.repository.TrabajadoraRepositorySQLite;
+import app.repository.ReglaComisionDetalladaRepository;
+import app.repository.ReglaComisionDetalladaRepositorySQLite;
 import app.system.ModalManager;
 import app.util.ToastNotification;
 import app.view.modals.ComisionModal;
@@ -26,17 +25,17 @@ public class ComisionesView extends JPanel {
 
     private static final Logger logger = LoggerFactory.getLogger(ComisionesView.class);
 
-    private final ReglaComisionRepository repository;
+    private final ReglaComisionDetalladaRepository repository;
     private JTable table;
     private DefaultTableModel tableModel;
-    private List<ReglaComision> listaCache;
+    private List<ReglaComisionDetallada> listaCache;
     private JTextField txtSearch;
     private Timer searchTimer;
-    private final DecimalFormat df = new DecimalFormat("0.00%");
+    private final DecimalFormat df = new DecimalFormat("0.##");
 
     public ComisionesView() {
-        logger.info("Inicializando ComisionesView");
-        this.repository = new ReglaComisionRepositorySQLite(new TrabajadoraRepositorySQLite());
+        logger.info("Inicializando ComisionesView (Detalladas)");
+        this.repository = new ReglaComisionDetalladaRepositorySQLite();
         init();
         loadData();
     }
@@ -51,7 +50,7 @@ public class ComisionesView extends JPanel {
         toolbar.add(title);
 
         txtSearch = new JTextField(20);
-        txtSearch.putClientProperty(FlatClientProperties.PLACEHOLDER_TEXT, "Buscar por nombre o categoría...");
+        txtSearch.putClientProperty(FlatClientProperties.PLACEHOLDER_TEXT, "Buscar por descripción...");
         txtSearch.putClientProperty(FlatClientProperties.STYLE, "arc:10");
         txtSearch.addKeyListener(new KeyAdapter() {
             @Override
@@ -73,7 +72,7 @@ public class ComisionesView extends JPanel {
 
         add(toolbar, "growx, wrap");
 
-        String[] columns = {"ID", "Trabajadora", "Categoría de Servicio", "Porcentaje de Comisión"};
+        String[] columns = {"ID", "Descripción", "Trabajadora", "Servicio/Categoría", "Tipo", "Valor", "Prioridad", "Activo"};
         tableModel = new DefaultTableModel(columns, 0) {
             @Override
             public boolean isCellEditable(int row, int column) { return false; }
@@ -116,7 +115,7 @@ public class ComisionesView extends JPanel {
         try {
             listaCache = repository.findAll();
             filterData("");
-            logger.info("✓ Cargadas {} reglas de comisión", listaCache.size());
+            logger.info("✓ Cargadas {} reglas de comisión detalladas", listaCache.size());
         } catch (DatabaseException e) {
             logger.error("Error cargando reglas de comisión: {}", e.getMessage(), e);
             ToastNotification.showError(this, "Error al Cargar", "No se pudieron cargar las reglas: " + e.getMessage());
@@ -129,17 +128,29 @@ public class ComisionesView extends JPanel {
         if (listaCache == null || listaCache.isEmpty()) return;
 
         String q = query.toLowerCase().trim();
-        for (ReglaComision r : listaCache) {
-            String nombreTrabajadora = (r.getTrabajadora() != null) ? r.getTrabajadora().getNombreCompleto() : "Trabajadora Eliminada";
-            if (q.isEmpty()
-                || nombreTrabajadora.toLowerCase().contains(q)
-                || (r.getCategoriaServicio() != null && r.getCategoriaServicio().toLowerCase().contains(q))) {
+        for (ReglaComisionDetallada r : listaCache) {
+            String desc = r.getDescripcion() != null ? r.getDescripcion() : "";
+            if (q.isEmpty() || desc.toLowerCase().contains(q)) {
+                
+                String trabajadora = r.getTrabajadoraId() != null ? r.getNombreTrabajadora() : "Todas";
+                String aplicacion = "";
+                if (r.getServicioId() != null) aplicacion = "Srv: " + r.getNombreServicio();
+                else if (r.getCategoriaServicio() != null) aplicacion = "Cat: " + r.getCategoriaServicio();
+                else aplicacion = "Todos";
+                
+                String valor = r.getTipoComision().equals("PORCENTAJE") ? 
+                        df.format(r.getValorComision() * 100) + "%" : 
+                        "$" + df.format(r.getValorComision());
 
                 tableModel.addRow(new Object[]{
                     r.getId(),
-                    nombreTrabajadora,
-                    r.getCategoriaServicio(),
-                    df.format(r.getPorcentajeComision())
+                    desc,
+                    trabajadora,
+                    aplicacion,
+                    r.getTipoComision(),
+                    valor,
+                    r.getPrioridad(),
+                    r.isActivo() ? "Sí" : "No"
                 });
             }
         }
@@ -152,7 +163,7 @@ public class ComisionesView extends JPanel {
         searchTimer.start();
     }
 
-    private void showModal(ReglaComision reglaEditar) {
+    private void showModal(ReglaComisionDetallada reglaEditar) {
         ModalOption option = ModalOption.getDefault()
                 .setHorizontalPosition(ModalOption.Position.RIGHT)
                 .setVerticalPosition(ModalOption.Position.CENTER)
@@ -181,11 +192,10 @@ public class ComisionesView extends JPanel {
         }
 
         int id = (int) table.getValueAt(row, 0);
-        String nombre = (String) table.getValueAt(row, 1);
-        String categoria = (String) table.getValueAt(row, 2);
+        String desc = (String) table.getValueAt(row, 1);
 
         int confirm = JOptionPane.showConfirmDialog(this,
-                String.format("¿Está seguro de eliminar la regla para %s en la categoría %s?\n\nEsta acción no se puede deshacer.", nombre, categoria),
+                String.format("¿Está seguro de eliminar la regla '%s'?\n\nEsta acción no se puede deshacer.", desc),
                 "Confirmar Eliminación", JOptionPane.YES_NO_OPTION, JOptionPane.WARNING_MESSAGE);
 
         if (confirm == JOptionPane.YES_OPTION) {
@@ -207,7 +217,7 @@ public class ComisionesView extends JPanel {
         }
 
         int id = (int) table.getValueAt(row, 0);
-        ReglaComision seleccionada = listaCache.stream()
+        ReglaComisionDetallada seleccionada = listaCache.stream()
                 .filter(r -> r.getId() == id)
                 .findFirst().orElse(null);
 
