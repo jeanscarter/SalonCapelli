@@ -8,9 +8,15 @@ import raven.modal.Toast;
 public class FormManager {
 
     private final JPanel contentPane;
+    private final app.main.MainFrame mainFrame;
 
-    public FormManager(JPanel contentPane) {
+    public FormManager(JPanel contentPane, app.main.MainFrame mainFrame) {
         this.contentPane = contentPane;
+        this.mainFrame = mainFrame;
+    }
+    
+    public app.main.MainFrame getMainFrame() {
+        return mainFrame;
     }
 
     public void showForm(Component form) {

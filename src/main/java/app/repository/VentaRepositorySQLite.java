@@ -35,7 +35,7 @@ public class VentaRepositorySQLite implements VentaRepository {
 
     private static final String SQL_INSERT_VENTA =
         "INSERT INTO ventas (cliente_id, fecha_venta, subtotal, tipo_descuento, monto_descuento, " +
-        "monto_iva, total, tasa_bcv, numero_correlativo) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)";
+        "monto_iva, total, tasa_bcv, numero_correlativo, estatus) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
 
     private static final String SQL_INSERT_ITEM =
         "INSERT INTO venta_items (venta_id, servicio_id, trabajadora_id, precio_venta, " +
@@ -86,6 +86,9 @@ public class VentaRepositorySQLite implements VentaRepository {
     private static final String SQL_SUM_TOTAL_RANGO =
         "SELECT COALESCE(SUM(total), 0) FROM ventas WHERE DATE(fecha_venta) BETWEEN ? AND ?";
 
+    private static final String SQL_FIND_TASA_BY_FECHA =
+        "SELECT tasa_bcv FROM ventas WHERE DATE(fecha_venta) = DATE(?) AND tasa_bcv > 0 LIMIT 1";
+
     // Queries para cargar colecciones hijas
     private static final String SQL_FIND_ITEMS_BY_VENTA =
         "SELECT vi.*, s.nombre AS nombre_servicio, " +
@@ -127,6 +130,7 @@ public class VentaRepositorySQLite implements VentaRepository {
                 pstmt.setDouble(7, venta.getTotal());
                 pstmt.setDouble(8, venta.getTasaBcv());
                 pstmt.setString(9, venta.getNumeroCorrelativo());
+                pstmt.setString(10, venta.getEstatus() != null ? venta.getEstatus() : "PAGADA");
 
                 pstmt.executeUpdate();
 
@@ -373,6 +377,29 @@ public class VentaRepositorySQLite implements VentaRepository {
             throw DatabaseException.queryFailed("SUM_TOTAL_RANGO VENTAS", e);
         }
         return 0;
+    }
+
+    @Override
+    public Double findTasaBcvByFecha(LocalDate fecha) throws DatabaseException {
+        try (Connection conn = DatabaseConnection.connect();
+             PreparedStatement pstmt = conn.prepareStatement(SQL_FIND_TASA_BY_FECHA)) {
+
+            pstmt.setString(1, fecha.toString());
+
+            try (ResultSet rs = pstmt.executeQuery()) {
+                if (rs.next()) {
+                    double tasa = rs.getDouble(1);
+                    if (!rs.wasNull() && tasa > 0) {
+                        logger.debug("Tasa BCV encontrada para {}: {}", fecha, tasa);
+                        return tasa;
+                    }
+                }
+            }
+        } catch (SQLException e) {
+            throw DatabaseException.queryFailed("FIND_TASA_BY_FECHA", e);
+        }
+        logger.debug("No se encontró tasa BCV para fecha: {}", fecha);
+        return null;
     }
 
     // ===== Mappers privados =====

@@ -334,8 +334,8 @@ public class ClienteRepositorySQLite implements ClienteRepository {
         c.setDireccion(rs.getString("direccion"));
         
         String tipo = rs.getString("tipo_cabello");
-        if (tipo != null) {
-            c.setTipoCabello(TipoCabello.valueOf(tipo));
+        if (tipo != null && !tipo.isBlank()) {
+            c.setTipoCabello(TipoCabello.fromString(tipo));
         }
         
         c.setTipoExtensiones(rs.getString("tipo_extensiones"));
@@ -353,7 +353,20 @@ public class ClienteRepositorySQLite implements ClienteRepository {
     }
 
     private LocalDate stringToDate(String dateStr) {
-        return (dateStr != null && !dateStr.isEmpty()) ? LocalDate.parse(dateStr) : null;
+        if (dateStr == null || dateStr.isBlank() || dateStr.contains("_")) {
+            return null;
+        }
+        try {
+            return LocalDate.parse(dateStr);
+        } catch (java.time.format.DateTimeParseException e) {
+            try {
+                java.time.format.DateTimeFormatter formatter = java.time.format.DateTimeFormatter.ofPattern("dd/MM/yyyy");
+                return LocalDate.parse(dateStr, formatter);
+            } catch (java.time.format.DateTimeParseException ex) {
+                logger.warn("Fecha inválida ignorada: '{}' — se tratará como null", dateStr);
+                return null;
+            }
+        }
     }
     
     /**

@@ -198,11 +198,18 @@ public class ClientesView extends JPanel {
                 .setCloseOnEscape(true)
                 .setCloseOnClickOutside(false);
 
-        ClienteModal modal = new ClienteModal(clienteEditar, cliente -> {
-            logger.info("Callback: Cliente guardado exitosamente");
-            loadData();
-            // ✅ El Toast ya se muestra en el modal, no duplicar aquí
-        });
+        ClienteModal modal;
+        if (clienteEditar != null) {
+            modal = new ClienteModal(clienteEditar, cliente -> {
+                logger.info("Callback: Cliente guardado exitosamente");
+                loadData();
+            });
+        } else {
+            modal = new ClienteModal(cliente -> {
+                logger.info("Callback: Cliente guardado exitosamente");
+                loadData();
+            });
+        }
 
         ModalManager.showModal(this, modal, option);
     }

@@ -350,6 +350,42 @@ public class DatabaseConnection {
         String sqlPropinas3 = "CREATE INDEX IF NOT EXISTS idx_propinas_trabajadora ON propinas(trabajadora_id)";
 
         // =====================================================================
+        // MÓDULO: CUENTAS POR COBRAR (Fase 4.5)
+        // =====================================================================
+
+        String sqlCuentasPorCobrar1 = """
+                CREATE TABLE IF NOT EXISTS cuentas_por_cobrar (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    cliente_id INTEGER NOT NULL,
+                    venta_id INTEGER NOT NULL,
+                    monto_original REAL NOT NULL,
+                    monto_pendiente REAL NOT NULL,
+                    fecha_creacion TEXT DEFAULT CURRENT_TIMESTAMP,
+                    fecha_ultimo_abono TEXT,
+                    estatus TEXT DEFAULT 'PENDIENTE', -- PENDIENTE, PARCIAL, PAGADA
+                    FOREIGN KEY (cliente_id) REFERENCES clientes(id),
+                    FOREIGN KEY (venta_id) REFERENCES ventas(id) ON DELETE CASCADE
+                )""";
+
+        String sqlCuentasPorCobrar2 = "CREATE INDEX IF NOT EXISTS idx_cxc_cliente ON cuentas_por_cobrar(cliente_id)";
+
+        // =====================================================================
+        // MÓDULO: SEGURIDAD (Fase 6)
+        // =====================================================================
+
+        String sqlUsuarios1 = """
+                CREATE TABLE IF NOT EXISTS usuarios (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    username TEXT UNIQUE NOT NULL,
+                    password_hash TEXT NOT NULL,
+                    rol TEXT NOT NULL,
+                    activo INTEGER DEFAULT 1,
+                    fecha_creacion TEXT DEFAULT CURRENT_TIMESTAMP
+                )""";
+
+        String sqlUsuarios2 = "CREATE INDEX IF NOT EXISTS idx_usuarios_username ON usuarios(username)";
+
+        // =====================================================================
         // MÓDULO: CONFIGURACIÓN
         // =====================================================================
 
@@ -372,6 +408,15 @@ public class DatabaseConnection {
             stmt.execute(sqlClientes1);
             stmt.execute(sqlClientes2);
             stmt.execute(sqlClientes3);
+
+            try {
+                stmt.execute("ALTER TABLE clientes ADD COLUMN intercambio_activo INTEGER DEFAULT 0");
+            } catch (SQLException e) {
+            }
+            try {
+                stmt.execute("ALTER TABLE clientes ADD COLUMN fecha_vencimiento_intercambio TEXT");
+            } catch (SQLException e) {
+            }
 
             // Trabajadoras
             stmt.execute(sqlTrabajadoras1);
@@ -443,6 +488,11 @@ public class DatabaseConnection {
             stmt.execute(sqlVentas3);
             stmt.execute(sqlVentas4);
 
+            try {
+                stmt.execute("ALTER TABLE ventas ADD COLUMN estatus TEXT DEFAULT 'PAGADA'");
+            } catch (SQLException e) {
+            }
+
             // Venta Items
             stmt.execute(sqlVentaItems1);
             stmt.execute(sqlVentaItems2);
@@ -457,6 +507,10 @@ public class DatabaseConnection {
             stmt.execute(sqlPropinas2);
             stmt.execute(sqlPropinas3);
 
+            // Cuentas por Cobrar
+            stmt.execute(sqlCuentasPorCobrar1);
+            stmt.execute(sqlCuentasPorCobrar2);
+
             // Inventario: Movimientos (después de ventas por FK)
             stmt.execute(sqlMovimientos1);
             stmt.execute(sqlMovimientos2);
@@ -464,6 +518,14 @@ public class DatabaseConnection {
 
             // App Settings
             stmt.execute(sqlSettings1);
+
+            // Usuarios
+            stmt.execute(sqlUsuarios1);
+            stmt.execute(sqlUsuarios2);
+
+            // Insertar admin por defecto si no existe (pass: admin123)
+            // Hash SHA-256 de "admin123" es "8c6976e5b5410415bde908bd4dee15dfb167a9c873fc4bb8a81f6f2ab448a918"
+            stmt.execute("INSERT OR IGNORE INTO usuarios (username, password_hash, rol) VALUES ('admin', '240be518fabd2724ddb6f04eeb1da5967448d7e831c08c8fa822809f74c720a9', 'ADMIN')");
 
             // Inicializar configuración por defecto
             stmt.execute("INSERT OR IGNORE INTO app_settings (setting_key, setting_value) VALUES ('correlativo', '1')");

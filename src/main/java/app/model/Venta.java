@@ -27,6 +27,7 @@ public class Venta {
     private double total;
     private double tasaBcv;             // Tasa BCV al momento de la venta
     private String numeroCorrelativo;   // Ej. "000042"
+    private String estatus;             // "PAGADA", "PENDIENTE", "PARCIAL"
 
     // Colecciones hijas (cargadas bajo demanda o en transacciones)
     private List<VentaItem> items;
@@ -41,6 +42,7 @@ public class Venta {
         this.pagos = new ArrayList<>();
         this.propinas = new ArrayList<>();
         this.fechaVenta = LocalDateTime.now();
+        this.estatus = "PAGADA";
     }
 
     // ===== Getters & Setters =====
@@ -74,6 +76,9 @@ public class Venta {
 
     public String getNumeroCorrelativo() { return numeroCorrelativo; }
     public void setNumeroCorrelativo(String numeroCorrelativo) { this.numeroCorrelativo = numeroCorrelativo; }
+
+    public String getEstatus() { return estatus; }
+    public void setEstatus(String estatus) { this.estatus = estatus; }
 
     public List<VentaItem> getItems() { return items; }
     public void setItems(List<VentaItem> items) { this.items = items; }

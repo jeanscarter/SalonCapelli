@@ -24,12 +24,19 @@ import java.time.format.DateTimeFormatter;
 import java.time.format.DateTimeParseException;
 
 /**
- * Modal para crear/editar clientes con validación robusta
- * Patrones: MVC + Command + Strategy (validación)
+ * Modal para crear/editar clientes con validación robusta.
+ * Patrones: MVC + Command + Strategy (validación).
+ *
+ * Soporta tres modos de apertura:
+ * 1. Nuevo cliente (constructor vacío con callback)
+ * 2. Editar cliente existente (constructor con Cliente)
+ * 3. Nuevo cliente con cédula pre-poblada (desde VentaView búsqueda fallida)
  */
 public class ClienteModal extends Modal {
     
     private static final Logger logger = LoggerFactory.getLogger(ClienteModal.class);
+    
+    private static final String[] PREFIJOS_DOCUMENTO = {"V", "J", "G", "P", "E"};
     
     private final ClienteRepository repository;
     private final DateTimeFormatter dateFormatter = DateTimeFormatter.ofPattern("dd/MM/yyyy");
@@ -37,8 +44,12 @@ public class ClienteModal extends Modal {
     private final ValidadorVenezolano validador;
     private Cliente clienteActual;
     
-    // Componentes UI
-    private JTextField txtCedula;
+    // Cédula pre-poblada desde VentaView (Fase 1)
+    private String cedulaPrePoblada;
+    
+    // Componentes UI — Cédula separada en prefijo + número
+    private JComboBox<String> cbPrefijoCedula;
+    private JTextField txtNumeroCedula;
     private JTextField txtNombre;
     private JTextField txtTelefono;
     private JTextField txtDireccion;
@@ -54,18 +65,36 @@ public class ClienteModal extends Modal {
     private JButton btnCancelar;
     
     /**
-     * Constructor para nuevo cliente
+     * Constructor para nuevo cliente (sin datos iniciales)
      */
     public ClienteModal(ClienteCallback callback) {
-        this(null, callback);
+        this(null, null, callback);
     }
     
     /**
-     * Constructor para editar cliente
+     * Constructor para editar cliente existente
      */
     public ClienteModal(Cliente cliente, ClienteCallback callback) {
-        logger.debug("Creando ClienteModal - Modo: {}", cliente == null ? "CREAR" : "EDITAR");
+        this(cliente, null, callback);
+    }
+    
+    /**
+     * Constructor con cédula pre-poblada (Fase 1 — desde búsqueda fallida en VentaView).
+     * Recibe formato "V-20123456" y lo descompone automáticamente.
+     */
+    public ClienteModal(String cedulaCompleta, ClienteCallback callback) {
+        this(null, cedulaCompleta, callback);
+    }
+    
+    /**
+     * Constructor maestro privado
+     */
+    private ClienteModal(Cliente cliente, String cedulaPrePoblada, ClienteCallback callback) {
+        logger.debug("Creando ClienteModal - Modo: {}, Cédula pre-poblada: {}", 
+            cliente == null ? (cedulaPrePoblada != null ? "CREAR_PRE_POBLADO" : "CREAR") : "EDITAR",
+            cedulaPrePoblada);
         this.clienteActual = cliente;
+        this.cedulaPrePoblada = cedulaPrePoblada;
         this.callback = callback;
         this.repository = new ClienteRepositorySQLite();
         this.validador = ValidadorVenezolano.getInstance();
@@ -77,7 +106,7 @@ public class ClienteModal extends Modal {
         
         // Layout principal sin altura fija
         setLayout(new BorderLayout());
-        setPreferredSize(new Dimension(550, 700)); // Aumentado a 700px
+        setPreferredSize(new Dimension(550, 700));
         
         putClientProperty(FlatClientProperties.STYLE, "arc:15");
         
@@ -100,7 +129,9 @@ public class ClienteModal extends Modal {
         add(scrollPane, BorderLayout.CENTER);
         
         if (clienteActual != null) {
-            loadData();
+            loadDataFromCliente();
+        } else if (cedulaPrePoblada != null) {
+            loadDataFromCedula();
         }
         
         logger.debug("✓ Componentes instalados");
@@ -110,7 +141,15 @@ public class ClienteModal extends Modal {
         JPanel headerPanel = new JPanel(new MigLayout("insets 0", "[]push[]", "[]"));
         headerPanel.setOpaque(false);
         
-        String title = clienteActual == null ? "Nuevo Cliente" : "Editar Cliente";
+        String title;
+        if (clienteActual != null) {
+            title = "Editar Cliente";
+        } else if (cedulaPrePoblada != null) {
+            title = "Registrar Nuevo Cliente";
+        } else {
+            title = "Nuevo Cliente";
+        }
+        
         JLabel lblTitle = new JLabel(title);
         lblTitle.putClientProperty(FlatClientProperties.STYLE, "font:bold +8");
         headerPanel.add(lblTitle);
@@ -136,8 +175,8 @@ public class ClienteModal extends Modal {
         // Sección: Datos Personales
         addSectionLabel(parent, "Datos Personales");
         
-        txtCedula = createTextField("V-12345678 o E-12345678");
-        parent.add(createFieldPanel("Cédula:", txtCedula));
+        // Cédula separada: Prefijo (JComboBox) + Número (JTextField)
+        parent.add(createCedulaPanel());
         
         txtNombre = createTextField("Nombre completo");
         parent.add(createFieldPanel("Nombre:", txtNombre));
@@ -174,6 +213,44 @@ public class ClienteModal extends Modal {
         
         txtUltimoMantenimiento = createDateField();
         parent.add(createFieldPanel("Mantenimiento:", txtUltimoMantenimiento));
+    }
+    
+    /**
+     * Crea el panel de cédula con prefijo separado del número.
+     * Layout: [Label: 120px] [Combo Prefijo: 65px] [- separador] [Campo Número: grow]
+     */
+    private JPanel createCedulaPanel() {
+        JPanel panel = new JPanel(new MigLayout("insets 0", "[120]10[65!]5[]5[grow,fill]", "[]"));
+        panel.setOpaque(false);
+        
+        JLabel lbl = new JLabel("Cédula/RIF:");
+        panel.add(lbl);
+        
+        cbPrefijoCedula = new JComboBox<>(PREFIJOS_DOCUMENTO);
+        cbPrefijoCedula.putClientProperty(FlatClientProperties.STYLE, "arc:8");
+        panel.add(cbPrefijoCedula);
+        
+        JLabel lblGuion = new JLabel("-");
+        lblGuion.putClientProperty(FlatClientProperties.STYLE, "font:bold +2");
+        panel.add(lblGuion);
+        
+        txtNumeroCedula = new JTextField();
+        txtNumeroCedula.putClientProperty(FlatClientProperties.PLACEHOLDER_TEXT, "12345678");
+        txtNumeroCedula.putClientProperty(FlatClientProperties.STYLE, "arc:8");
+        // Filtro: solo dígitos
+        txtNumeroCedula.addKeyListener(new java.awt.event.KeyAdapter() {
+            @Override
+            public void keyTyped(java.awt.event.KeyEvent e) {
+                char c = e.getKeyChar();
+                if (!Character.isDigit(c) && c != java.awt.event.KeyEvent.VK_BACK_SPACE 
+                    && c != java.awt.event.KeyEvent.VK_DELETE) {
+                    e.consume();
+                }
+            }
+        });
+        panel.add(txtNumeroCedula);
+        
+        return panel;
     }
     
     private void createButtons(JPanel parent) {
@@ -233,11 +310,19 @@ public class ClienteModal extends Modal {
         parent.add(lbl, "gaptop 10,gapbottom 5");
     }
     
-    private void loadData() {
+    // ========== Carga de datos ==========
+    
+    /**
+     * Carga datos desde un cliente existente (modo edición)
+     */
+    private void loadDataFromCliente() {
         logger.debug("Cargando datos del cliente ID: {}", clienteActual.getId());
         
-        txtCedula.setText(clienteActual.getCedula());
-        txtCedula.setEnabled(false); // No permitir cambiar cédula
+        // Parsear cédula existente "V-12345678" → Combo "V" + Campo "12345678"
+        parsearCedulaAComponentes(clienteActual.getCedula());
+        cbPrefijoCedula.setEnabled(false);
+        txtNumeroCedula.setEnabled(false);
+        
         txtNombre.setText(clienteActual.getNombreCompleto());
         txtTelefono.setText(clienteActual.getTelefono());
         txtDireccion.setText(clienteActual.getDireccion());
@@ -250,95 +335,154 @@ public class ClienteModal extends Modal {
         setDateField(txtUltimaKeratina, clienteActual.getFechaUltimaKeratina());
         setDateField(txtUltimoMantenimiento, clienteActual.getFechaUltimoMantenimiento());
         
-        logger.debug("✓ Datos cargados");
+        logger.debug("✓ Datos cargados desde cliente existente");
     }
+    
+    /**
+     * Carga datos pre-poblados desde una cédula (Fase 1 — búsqueda fallida).
+     * La cédula viene en formato "V-20123456", se descompone y se bloquea.
+     */
+    private void loadDataFromCedula() {
+        logger.debug("Pre-poblando cédula desde búsqueda: {}", cedulaPrePoblada);
+        
+        parsearCedulaAComponentes(cedulaPrePoblada);
+        cbPrefijoCedula.setEnabled(false);
+        txtNumeroCedula.setEnabled(false);
+        
+        // Foco directo al nombre para agilizar el registro
+        SwingUtilities.invokeLater(() -> txtNombre.requestFocusInWindow());
+        
+        logger.debug("✓ Cédula pre-poblada, foco en nombre");
+    }
+    
+    /**
+     * Parsea una cédula completa "V-12345678" y la distribuye en los componentes.
+     */
+    private void parsearCedulaAComponentes(String cedulaCompleta) {
+        if (cedulaCompleta == null || cedulaCompleta.isBlank()) return;
+        
+        String cedula = cedulaCompleta.trim().toUpperCase();
+        
+        if (cedula.contains("-")) {
+            String[] partes = cedula.split("-", 2);
+            String prefijo = partes[0].trim();
+            String numero = partes[1].trim();
+            
+            // Seleccionar prefijo en combo
+            for (int i = 0; i < cbPrefijoCedula.getItemCount(); i++) {
+                if (cbPrefijoCedula.getItemAt(i).equalsIgnoreCase(prefijo)) {
+                    cbPrefijoCedula.setSelectedIndex(i);
+                    break;
+                }
+            }
+            txtNumeroCedula.setText(numero);
+        } else {
+            // Formato sin guion: primer carácter = prefijo, resto = número
+            if (cedula.length() > 1 && Character.isLetter(cedula.charAt(0))) {
+                String prefijo = String.valueOf(cedula.charAt(0));
+                for (int i = 0; i < cbPrefijoCedula.getItemCount(); i++) {
+                    if (cbPrefijoCedula.getItemAt(i).equalsIgnoreCase(prefijo)) {
+                        cbPrefijoCedula.setSelectedIndex(i);
+                        break;
+                    }
+                }
+                txtNumeroCedula.setText(cedula.substring(1));
+            } else {
+                txtNumeroCedula.setText(cedula);
+            }
+        }
+    }
+    
+    /**
+     * Ensambla la cédula completa desde los componentes: "V" + "-" + "12345678" → "V-12345678"
+     */
+    private String ensamblarCedula() {
+        String prefijo = (String) cbPrefijoCedula.getSelectedItem();
+        String numero = txtNumeroCedula.getText().trim();
+        return prefijo + "-" + numero;
+    }
+    
+    // ========== Guardado ==========
     
     /**
      * Guarda el cliente con validación y manejo de excepciones específicas
      */
-   private void guardarCliente() {
-    logger.info("Iniciando proceso de guardado de cliente");
-    
-    btnGuardar.setEnabled(false);
-    
-    try {
-        Cliente cliente = buildAndValidateCliente();
+    private void guardarCliente() {
+        logger.info("Iniciando proceso de guardado de cliente");
         
-        if (clienteActual == null) {
-            logger.debug("Creando nuevo cliente");
-            repository.create(cliente);
-            logger.info("✓ Cliente creado: {} - {}", cliente.getCedula(), cliente.getNombreCompleto());
+        btnGuardar.setEnabled(false);
+        
+        try {
+            Cliente cliente = buildAndValidateCliente();
             
-            // ✅ Toast de éxito
-            ToastNotification.showSuccess(
-                this, 
-                "Cliente Registrado", 
-                "El cliente ha sido registrado exitosamente"
-            );
-        } else {
-            logger.debug("Actualizando cliente ID: {}", clienteActual.getId());
-            repository.update(cliente);
-            logger.info("✓ Cliente actualizado: {} - {}", cliente.getCedula(), cliente.getNombreCompleto());
+            if (clienteActual == null) {
+                logger.debug("Creando nuevo cliente");
+                repository.create(cliente);
+                logger.info("✓ Cliente creado: {} - {}", cliente.getCedula(), cliente.getNombreCompleto());
+                
+                ToastNotification.showSuccess(
+                    this, 
+                    "Cliente Registrado", 
+                    "El cliente ha sido registrado exitosamente"
+                );
+            } else {
+                logger.debug("Actualizando cliente ID: {}", clienteActual.getId());
+                repository.update(cliente);
+                logger.info("✓ Cliente actualizado: {} - {}", cliente.getCedula(), cliente.getNombreCompleto());
+                
+                ToastNotification.showSuccess(
+                    this,
+                    "Cliente Actualizado",
+                    "Los datos del cliente se han actualizado correctamente"
+                );
+            }
             
-            // ✅ Toast de éxito
-            ToastNotification.showSuccess(
+            if (callback != null) {
+                callback.onSuccess(cliente);
+            }
+            
+            getController().closeModal();
+            
+        } catch (ValidationException e) {
+            logger.warn("Errores de validación: {}", e.getMessage());
+            ToastNotification.showValidationErrors(this, e);
+            
+        } catch (ClienteDuplicadoException e) {
+            logger.warn("Cliente duplicado: {}", e.getCedula());
+            ToastNotification.showError(
                 this,
-                "Cliente Actualizado",
-                "Los datos del cliente se han actualizado correctamente"
+                "Cliente Duplicado",
+                "Ya existe un cliente registrado con la cédula: " + e.getCedula()
             );
+            
+        } catch (ClienteNotFoundException e) {
+            logger.error("Cliente no encontrado: {}", e.getMessage());
+            ToastNotification.showError(
+                this,
+                "Error Crítico",
+                "No se encontró el cliente a actualizar. Por favor, recargue la lista."
+            );
+            
+        } catch (ClienteException e) {
+            logger.error("Error de negocio: {}", e.getMessage(), e);
+            ToastNotification.showError(
+                this,
+                "Error al Guardar",
+                "Ocurrió un error al procesar el cliente: " + e.getMessage()
+            );
+            
+        } catch (Exception e) {
+            logger.error("Error inesperado guardando cliente", e);
+            ToastNotification.showError(
+                this,
+                "Error Inesperado",
+                "Ha ocurrido un error inesperado. Por favor, intente nuevamente."
+            );
+            
+        } finally {
+            btnGuardar.setEnabled(true);
         }
-        
-        if (callback != null) {
-            callback.onSuccess(cliente);
-        }
-        
-        getController().closeModal();
-        
-    } catch (ValidationException e) {
-        logger.warn("Errores de validación: {}", e.getMessage());
-        // ✅ Toast de validación con múltiples errores
-        ToastNotification.showValidationErrors(this, e);
-        
-    } catch (ClienteDuplicadoException e) {
-        logger.warn("Cliente duplicado: {}", e.getCedula());
-        // ✅ Toast de error
-        ToastNotification.showError(
-            this,
-            "Cliente Duplicado",
-            "Ya existe un cliente registrado con la cédula: " + e.getCedula()
-        );
-        
-    } catch (ClienteNotFoundException e) {
-        logger.error("Cliente no encontrado: {}", e.getMessage());
-        // ✅ Toast de error crítico
-        ToastNotification.showError(
-            this,
-            "Error Crítico",
-            "No se encontró el cliente a actualizar. Por favor, recargue la lista."
-        );
-        
-    } catch (ClienteException e) {
-        logger.error("Error de negocio: {}", e.getMessage(), e);
-        // ✅ Toast de error
-        ToastNotification.showError(
-            this,
-            "Error al Guardar",
-            "Ocurrió un error al procesar el cliente: " + e.getMessage()
-        );
-        
-    } catch (Exception e) {
-        logger.error("Error inesperado guardando cliente", e);
-        // ✅ Toast de error genérico
-        ToastNotification.showError(
-            this,
-            "Error Inesperado",
-            "Ha ocurrido un error inesperado. Por favor, intente nuevamente."
-        );
-        
-    } finally {
-        btnGuardar.setEnabled(true);
     }
-}
     
     /**
      * Construye y valida el objeto Cliente
@@ -348,8 +492,9 @@ public class ClienteModal extends Modal {
         
         Cliente cliente = clienteActual != null ? clienteActual : new Cliente();
         
-        // Validar y normalizar cédula
-        String cedula = validador.validarYNormalizarCedula(txtCedula.getText());
+        // Ensamblar y validar cédula desde los componentes separados
+        String cedulaCompleta = ensamblarCedula();
+        String cedula = validador.validarYNormalizarCedula(cedulaCompleta);
         cliente.setCedula(cedula);
         
         // Validar nombre
@@ -402,7 +547,7 @@ public class ClienteModal extends Modal {
     
     
     /**
-     * Interfaz callback para notificar eventos
+     * Interfaz callback para notificar eventos.
      * Patrón: Observer
      */
     public interface ClienteCallback {

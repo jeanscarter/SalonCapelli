@@ -19,6 +19,8 @@ public class MainFrame extends JFrame {
 
     private FormManager formManager;
     private JPanel body;
+    private JToolBar toolbar;
+    private MyDrawerBuilder drawerBuilder;
 
     public MainFrame() {
         init();
@@ -45,7 +47,8 @@ public class MainFrame extends JFrame {
         setContentPane(contentPane);
 
         // Toolbar
-        JToolBar toolbar = new JToolBar();
+        toolbar = new JToolBar();
+        toolbar.setVisible(false); // Oculto hasta login exitoso
 
         JButton cmdMenu = new JButton();
         cmdMenu.setIcon(new FlatSVGIcon("icons/menu.svg"));
@@ -59,12 +62,27 @@ public class MainFrame extends JFrame {
         contentPane.add(body, BorderLayout.CENTER);
 
         // 1. Instanciar FormManager
-        formManager = new FormManager(body);
+        formManager = new FormManager(body, this);
 
         // 2. Instalar Drawer - Usamos el layout responsivo por defecto
-        Drawer.installDrawer(this, new MyDrawerBuilder(formManager));
+        drawerBuilder = new MyDrawerBuilder(formManager);
+        Drawer.installDrawer(this, drawerBuilder);
 
-        // Vista inicial
-        formManager.showForm(new app.view.HomeView());
+        // Vista inicial (Login)
+        formManager.showForm(new app.view.LoginView(formManager));
+    }
+    
+    public void showToolbar() {
+        if (toolbar != null) {
+            toolbar.setVisible(true);
+        }
+    }
+    
+    public void updateDrawerFooter(String username, String rol) {
+        if (drawerBuilder != null && drawerBuilder.getSimpleFooterData() != null) {
+            drawerBuilder.getSimpleFooterData().setTitle(username);
+            drawerBuilder.getSimpleFooterData().setDescription(rol);
+            // Si es necesario repintar el drawer, se haría aquí.
+        }
     }
 }

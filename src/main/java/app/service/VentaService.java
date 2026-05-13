@@ -10,6 +10,10 @@ import app.repository.ProductoRepository;
 import app.repository.ProductoRepositorySQLite;
 import app.repository.VentaRepository;
 import app.repository.VentaRepositorySQLite;
+import app.repository.CuentaPorCobrarRepository;
+import app.repository.CuentaPorCobrarRepositorySQLite;
+import app.model.CuentaPorCobrar;
+import app.model.Pago;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -17,11 +21,15 @@ import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
+import java.time.LocalDate;
 
 /**
  * Servicio principal de Ventas.
  * Orquesta la validación de inventario, generación de correlativos 
  * y delegación a la capa de persistencia transaccional.
+ *
+ * Fase 2: Soporta modo histórico (Ctrl+F4) donde el correlativo,
+ * fecha y tasa BCV son proporcionados externamente.
  */
 public class VentaService {
 
@@ -29,15 +37,20 @@ public class VentaService {
     
     private final VentaRepository ventaRepository;
     private final ProductoRepository productoRepository;
+    private final CuentaPorCobrarRepository cxcRepository;
 
     public VentaService() {
         this.ventaRepository = new VentaRepositorySQLite();
         this.productoRepository = new ProductoRepositorySQLite();
+        this.cxcRepository = new CuentaPorCobrarRepositorySQLite();
     }
 
     /**
      * Procesa una venta completa. Valida stock antes de intentar persistir.
      * Si todo es válido, genera el correlativo y delega a saveCompleteVenta.
+     *
+     * Fase 2: Si la venta ya tiene correlativo pre-asignado (modo histórico),
+     * no genera uno nuevo ni consulta la tasa BCV.
      */
     public void procesarVenta(Venta venta) throws DatabaseException, ValidationException {
         logger.info("Iniciando procesamiento de venta...");
@@ -48,12 +61,16 @@ public class VentaService {
         // 2. Validación de Stock Físico
         validarStockFisico(venta);
 
-        // 3. Generar Correlativo
-        String correlativo = generarProximoCorrelativo();
-        venta.setNumeroCorrelativo(correlativo);
-        logger.debug("Correlativo generado: {}", correlativo);
+        // 3. Generar Correlativo (solo si no viene pre-asignado — modo histórico)
+        if (venta.getNumeroCorrelativo() == null || venta.getNumeroCorrelativo().isBlank()) {
+            String correlativo = generarProximoCorrelativo();
+            venta.setNumeroCorrelativo(correlativo);
+            logger.debug("Correlativo auto-generado: {}", correlativo);
+        } else {
+            logger.debug("Usando correlativo pre-asignado (modo histórico): {}", venta.getNumeroCorrelativo());
+        }
 
-        // 4. Asegurar Tasa BCV
+        // 4. Asegurar Tasa BCV (solo si no viene pre-asignada)
         if (venta.getTasaBcv() <= 0) {
             venta.setTasaBcv(BCVService.getCachedRate());
         }
@@ -61,7 +78,65 @@ public class VentaService {
         // 5. Persistencia Transaccional (todo o nada)
         ventaRepository.saveCompleteVenta(venta);
         
-        logger.info("✓ Venta procesada y guardada con éxito. Correlativo: {}", correlativo);
+        // 6. Fase 4.5: Registrar CxC si la venta no está PAGADA
+        if (!"PAGADA".equals(venta.getEstatus()) && venta.getClienteId() != null) {
+            double totalPagado = 0.0;
+            for (Pago p : venta.getPagos()) {
+                if ("Bs".equals(p.getMoneda()) && p.getTasaBcvAlPago() > 0) {
+                    totalPagado += p.getMonto() / p.getTasaBcvAlPago();
+                } else {
+                    totalPagado += p.getMonto();
+                }
+            }
+            double pendiente = venta.getTotal() - totalPagado;
+            if (pendiente > 0.01) {
+                CuentaPorCobrar cxc = new CuentaPorCobrar();
+                cxc.setClienteId(venta.getClienteId());
+                cxc.setVentaId(venta.getId());
+                cxc.setMontoOriginal(venta.getTotal());
+                cxc.setMontoPendiente(pendiente);
+                cxc.setEstatus(venta.getEstatus());
+                cxc.setFechaCreacion(venta.getFechaVenta());
+                cxcRepository.save(cxc);
+                logger.info("Cuenta por Cobrar registrada: Cliente={}, Monto=${}", venta.getClienteId(), pendiente);
+            }
+        }
+        
+        logger.info("✓ Venta procesada y guardada con éxito. Correlativo: {}", venta.getNumeroCorrelativo());
+    }
+
+    /**
+     * Obtiene el valor actual del correlativo (sin incrementar).
+     * Usado para mostrar el próximo número de factura en la UI.
+     *
+     * @return Correlativo formateado a 6 dígitos (ej. "000042")
+     */
+    public String obtenerCorrelativoActual() throws DatabaseException {
+        String sql = "SELECT setting_value FROM app_settings WHERE setting_key = 'correlativo'";
+        
+        try (Connection conn = DatabaseConnection.connect();
+             PreparedStatement pstmt = conn.prepareStatement(sql);
+             ResultSet rs = pstmt.executeQuery()) {
+            
+            if (rs.next()) {
+                int valor = Integer.parseInt(rs.getString("setting_value"));
+                return String.format("%06d", valor);
+            }
+            
+            return "000001";
+            
+        } catch (SQLException | NumberFormatException e) {
+            logger.error("Error leyendo correlativo actual", e);
+            throw DatabaseException.queryFailed("LEER_CORRELATIVO", e);
+        }
+    }
+
+    /**
+     * Busca la tasa BCV utilizada en ventas de una fecha específica.
+     * Delegación directa al repositorio para uso desde la UI.
+     */
+    public Double buscarTasaBcvPorFecha(LocalDate fecha) throws DatabaseException {
+        return ventaRepository.findTasaBcvByFecha(fecha);
     }
 
     private void validarVenta(Venta venta) throws ValidationException {

@@ -62,6 +62,7 @@ public class MyDrawerBuilder extends SimpleDrawerBuilder {
         navigationMap.put("Comisiones", () -> new app.view.ComisionesView());
         navigationMap.put("Calcular Nómina", () -> new JLabel("VISTA: Cálculo de Nómina"));
         navigationMap.put("Facturación", () -> new app.view.VentaView());
+        navigationMap.put("Cuentas por Cobrar", () -> new app.view.CuentasPorCobrarView());
 
         MenuItem[] items = new MenuItem[] {
                 new Item("Dashboard"),
@@ -78,7 +79,8 @@ public class MyDrawerBuilder extends SimpleDrawerBuilder {
                 new Item.Label("FINANZAS"),
                 new Item("Comisiones"),
                 new Item("Calcular Nómina"),
-                new Item("Facturación")
+                new Item("Facturación"),
+                new Item("Cuentas por Cobrar")
         };
 
         MenuOption option = new MenuOption();

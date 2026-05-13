@@ -49,4 +49,13 @@ public interface VentaRepository {
      * Obtiene el total de ventas para un rango de fechas
      */
     double sumTotalByRangoFechas(LocalDate inicio, LocalDate fin) throws DatabaseException;
+
+    /**
+     * Busca la tasa BCV utilizada en ventas de una fecha específica.
+     * Útil para autocompletar la tasa en el modo histórico (Ctrl+F4).
+     *
+     * @param fecha Fecha a consultar
+     * @return La tasa BCV si hay ventas ese día, null si no hay registros
+     */
+    Double findTasaBcvByFecha(LocalDate fecha) throws DatabaseException;
 }

@@ -19,6 +19,10 @@ public class Cliente {
     private LocalDate fechaUltimaKeratina;
     private LocalDate fechaUltimoMantenimiento;
 
+    // Fase 4.5: Intercambio publicitario/influencer
+    private boolean intercambioActivo;
+    private LocalDate fechaVencimientoIntercambio;
+
     public Cliente() {
     }
 
@@ -74,6 +78,12 @@ public class Cliente {
     public LocalDate getFechaUltimoMantenimiento() { return fechaUltimoMantenimiento; }
     public void setFechaUltimoMantenimiento(LocalDate fechaUltimoMantenimiento) { this.fechaUltimoMantenimiento = fechaUltimoMantenimiento; }
     
+    public boolean isIntercambioActivo() { return intercambioActivo; }
+    public void setIntercambioActivo(boolean intercambioActivo) { this.intercambioActivo = intercambioActivo; }
+
+    public LocalDate getFechaVencimientoIntercambio() { return fechaVencimientoIntercambio; }
+    public void setFechaVencimientoIntercambio(LocalDate fechaVencimientoIntercambio) { this.fechaVencimientoIntercambio = fechaVencimientoIntercambio; }
+
     // Método helper para verificar si es cumpleaños hoy (opcional pero útil para el dashboard)
     public boolean esCumpleanosHoy() {
         if (fechaCumpleanos == null) return false;
