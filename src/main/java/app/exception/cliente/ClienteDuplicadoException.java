@@ -17,6 +17,7 @@ public class ClienteDuplicadoException extends ClienteException {
     public ClienteDuplicadoException(String cedula) {
         super(ERROR_CODE, "Ya existe un cliente con la cédula: %s", cedula);
         this.cedula = cedula;
+        logCreation(); // CORRECCIÓN #10: después de inicializar campos propios
     }
     
     @Override

@@ -7,7 +7,12 @@ import org.slf4j.LoggerFactory;
  * Clase base para todas las excepciones del sistema
  * Patrón: Template Method
  * 
- * Proporciona logging automático y estructura común
+ * Proporciona logging automático y estructura común.
+ *
+ * CORRECCIÓN #10: logException() movido fuera de los constructores de BaseException.
+ * Las subclases deben llamar logCreation() explícitamente al final de su propio
+ * constructor, después de inicializar sus campos, para que el log incluya todos
+ * los datos relevantes (ej: cedula en ClienteDuplicadoException).
  */
 public abstract class BaseException extends Exception {
     
@@ -22,7 +27,7 @@ public abstract class BaseException extends Exception {
         super(message);
         this.errorCode = getDefaultErrorCode();
         this.params = new Object[0];
-        logException();
+        logCreation(); // Safe: no subclass fields to wait for in this constructor chain
     }
     
     /**
@@ -32,27 +37,31 @@ public abstract class BaseException extends Exception {
         super(message, cause);
         this.errorCode = getDefaultErrorCode();
         this.params = new Object[0];
-        logException();
+        logCreation(); // Safe: no subclass fields to wait for in this constructor chain
     }
     
     /**
-     * Constructor completo con código de error y parámetros
+     * Constructor completo con código de error y parámetros.
+     * NOTA: NO llama logCreation() — las subclases deben llamarlo
+     * explícitamente después de inicializar sus campos propios.
      */
     protected BaseException(String errorCode, String message, Object... params) {
         super(String.format(message, params));
         this.errorCode = errorCode;
         this.params = params;
-        logException();
+        // CORRECCIÓN #10: NO llamar logCreation() aquí — la subclase lo hará
     }
     
     /**
-     * Constructor completo con causa
+     * Constructor completo con causa.
+     * NOTA: NO llama logCreation() — las subclases deben llamarlo
+     * explícitamente después de inicializar sus campos propios.
      */
     protected BaseException(String errorCode, String message, Throwable cause, Object... params) {
         super(String.format(message, params), cause);
         this.errorCode = errorCode;
         this.params = params;
-        logException();
+        // CORRECCIÓN #10: NO llamar logCreation() aquí — la subclase lo hará
     }
     
     /**
@@ -68,9 +77,13 @@ public abstract class BaseException extends Exception {
     }
     
     /**
-     * Hook Method - Log automático de la excepción
+     * CORRECCIÓN #10: Método público para que las subclases llamen
+     * después de inicializar sus propios campos.
+     * Reemplaza el antiguo logException() privado que se llamaba
+     * desde el constructor de BaseException (antes de que la subclase
+     * asignara sus campos).
      */
-    private void logException() {
+    protected void logCreation() {
         String logMessage = String.format("[%s] %s", errorCode, getMessage());
         
         switch (getLogLevel()) {

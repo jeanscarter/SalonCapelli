@@ -226,9 +226,12 @@ public class ModalOption {
         option.setDuration(duration);
         option.setSliderDuration(sliderDuration);
         
-        // Aplicar opciones de borde
-        BorderOption.Shadow shadow = BorderOption.Shadow.MEDIUM;
-        borderOption.setShadow(shadow);
+        /* CORRECCIÓN #11: La librería maneja el border internamente, debemos modificar su instancia */
+        BorderOption optBorder = option.getBorderOption();
+        if (optBorder != null) {
+            optBorder.setRound(borderOption.getRound());
+            optBorder.setShadow(BorderOption.Shadow.MEDIUM);
+        }
         
         return option;
     }

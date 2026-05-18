@@ -10,6 +10,7 @@ public class ServicioNotFoundException extends ServicioException {
 
     private ServicioNotFoundException(String message) {
         super(ERROR_CODE, message);
+        logCreation(); // CORRECCIÓN #10
     }
 
     @Override

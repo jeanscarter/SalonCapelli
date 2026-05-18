@@ -10,6 +10,7 @@ public class ClienteNotFoundException extends ClienteException {
     
     private ClienteNotFoundException(String message) {
         super(ERROR_CODE, message);
+        logCreation(); // CORRECCIÓN #10
     }
     
     @Override

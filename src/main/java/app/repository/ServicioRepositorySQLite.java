@@ -59,7 +59,8 @@ public class ServicioRepositorySQLite implements ServicioRepository {
         try (Connection conn = DatabaseConnection.connect();
              PreparedStatement pstmt = conn.prepareStatement(SQL_UPDATE)) {
             mapServicioToStmt(s, pstmt);
-            pstmt.setInt(9, s.getId());
+            /* CORRECCIÓN #7: Índice dinámico */
+            pstmt.setInt(countParameters(SQL_UPDATE), s.getId());
             int affected = pstmt.executeUpdate();
             if (affected == 0) throw ServicioNotFoundException.byId(s.getId());
             logger.info("✓ Servicio actualizado: {}", s.getNombre());
@@ -137,15 +138,22 @@ public class ServicioRepositorySQLite implements ServicioRepository {
         }
     }
 
+    /* CORRECCIÓN #7: Usar contador incremental */
     private void mapServicioToStmt(Servicio s, PreparedStatement pstmt) throws SQLException {
-        pstmt.setString(1, s.getNombre());
-        pstmt.setString(2, s.getCategoria() != null ? s.getCategoria().name() : null);
-        pstmt.setDouble(3, s.getPrecioCorto());
-        pstmt.setDouble(4, s.getPrecioMediano());
-        pstmt.setDouble(5, s.getPrecioLargo());
-        pstmt.setDouble(6, s.getPrecioExtensiones());
-        pstmt.setBoolean(7, s.isPermiteClienteProducto());
-        pstmt.setDouble(8, s.getPrecioClienteProducto());
+        int i = 1;
+        pstmt.setString(i++, s.getNombre());
+        pstmt.setString(i++, s.getCategoria() != null ? s.getCategoria().name() : null);
+        pstmt.setDouble(i++, s.getPrecioCorto());
+        pstmt.setDouble(i++, s.getPrecioMediano());
+        pstmt.setDouble(i++, s.getPrecioLargo());
+        pstmt.setDouble(i++, s.getPrecioExtensiones());
+        pstmt.setBoolean(i++, s.isPermiteClienteProducto());
+        pstmt.setDouble(i++, s.getPrecioClienteProducto());
+    }
+
+    /* CORRECCIÓN #7: Conteo dinámico de parámetros */
+    private static int countParameters(String sql) {
+        return (int) sql.chars().filter(ch -> ch == '?').count();
     }
 
     private Servicio mapResultSetToServicio(ResultSet rs) throws SQLException {

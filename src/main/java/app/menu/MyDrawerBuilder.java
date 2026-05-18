@@ -20,6 +20,9 @@ import raven.modal.drawer.simple.header.SimpleHeaderData;
 
 public class MyDrawerBuilder extends SimpleDrawerBuilder {
 
+    /* CORRECCIÓN #5: Footer persistente, lazy initialization para evitar NullPointerException en super() */
+    private SimpleFooterData footerData;
+
     public MyDrawerBuilder(FormManager formManager) {
         super(createMenuOption(formManager));
     }
@@ -45,9 +48,12 @@ public class MyDrawerBuilder extends SimpleDrawerBuilder {
 
     @Override
     public SimpleFooterData getSimpleFooterData() {
-        return new SimpleFooterData()
-                .setTitle("Usuario Activo")
-                .setDescription("Administrador");
+        if (footerData == null) {
+            footerData = new SimpleFooterData()
+                    .setTitle("Usuario Activo")
+                    .setDescription("Administrador");
+        }
+        return footerData;
     }
 
     private static MenuOption createMenuOption(FormManager formManager) {

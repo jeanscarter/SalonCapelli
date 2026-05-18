@@ -78,11 +78,13 @@ public class MainFrame extends JFrame {
         }
     }
     
+    /* CORRECCIÓN #5: Actualiza el footer del drawer y fuerza repintado */
     public void updateDrawerFooter(String username, String rol) {
         if (drawerBuilder != null && drawerBuilder.getSimpleFooterData() != null) {
             drawerBuilder.getSimpleFooterData().setTitle(username);
             drawerBuilder.getSimpleFooterData().setDescription(rol);
-            // Si es necesario repintar el drawer, se haría aquí.
+            // Forzar repintado del componente drawer
+            repaint();
         }
     }
 }

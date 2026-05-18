@@ -24,25 +24,29 @@ public class ClienteRepositorySQLite implements ClienteRepository {
     private static final Logger logger = LoggerFactory.getLogger(ClienteRepositorySQLite.class);
     
     // Queries SQL como constantes (mejor mantenibilidad)
+    /* CORRECCIÓN #6/#15: Añadidos campos intercambio_activo y fecha_vencimiento_intercambio */
     private static final String SQL_CREATE = """
         INSERT INTO clientes (cedula, nombre_completo, telefono, direccion, 
         tipo_cabello, tipo_extensiones, fecha_cumpleanos, fecha_ultimo_tinte, 
-        fecha_ultimo_quimico, fecha_ultima_keratina, fecha_ultimo_mantenimiento) 
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        fecha_ultimo_quimico, fecha_ultima_keratina, fecha_ultimo_mantenimiento,
+        intercambio_activo, fecha_vencimiento_intercambio) 
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     """;
     
     private static final String SQL_UPDATE = """
         UPDATE clientes SET cedula=?, nombre_completo=?, telefono=?, direccion=?, 
         tipo_cabello=?, tipo_extensiones=?, fecha_cumpleanos=?, fecha_ultimo_tinte=?, 
         fecha_ultimo_quimico=?, fecha_ultima_keratina=?, fecha_ultimo_mantenimiento=?,
+        intercambio_activo=?, fecha_vencimiento_intercambio=?,
         fecha_modificacion=CURRENT_TIMESTAMP
         WHERE id=?
     """;
     
     private static final String SQL_DELETE = "DELETE FROM clientes WHERE id = ?";
     
+    /* CORRECCIÓN #12: Límite de 500 registros para evitar cargar toda la tabla en memoria */
     private static final String SQL_FIND_ALL = 
-        "SELECT * FROM clientes ORDER BY nombre_completo";
+        "SELECT * FROM clientes ORDER BY nombre_completo LIMIT 500";
     
     private static final String SQL_FIND_BY_CEDULA = 
         "SELECT * FROM clientes WHERE cedula = ?";
@@ -113,7 +117,8 @@ public class ClienteRepositorySQLite implements ClienteRepository {
             
             logger.debug("Mapeando cliente actualizado a PreparedStatement");
             mapClienteToStmt(c, pstmt);
-            pstmt.setInt(12, c.getId()); // WHERE id=?
+            /* CORRECCIÓN #7: Índice dinámico calculado contando '?' en el SQL */
+            pstmt.setInt(countParameters(SQL_UPDATE), c.getId()); // WHERE id=?
             
             int affected = pstmt.executeUpdate();
             logger.debug("Filas actualizadas: {}", affected);
@@ -308,18 +313,27 @@ public class ClienteRepositorySQLite implements ClienteRepository {
      * Mapea un Cliente a un PreparedStatement
      * Template Method para reutilizar en CREATE y UPDATE
      */
+    /* CORRECCIÓN #6/#15: Añadidos intercambio_activo y fecha_vencimiento_intercambio */
     private void mapClienteToStmt(Cliente c, PreparedStatement pstmt) throws SQLException {
-        pstmt.setString(1, c.getCedula());
-        pstmt.setString(2, c.getNombreCompleto());
-        pstmt.setString(3, c.getTelefono());
-        pstmt.setString(4, c.getDireccion());
-        pstmt.setString(5, c.getTipoCabello() != null ? c.getTipoCabello().name() : null);
-        pstmt.setString(6, c.getTipoExtensiones());
-        pstmt.setString(7, dateToString(c.getFechaCumpleanos()));
-        pstmt.setString(8, dateToString(c.getFechaUltimoTinte()));
-        pstmt.setString(9, dateToString(c.getFechaUltimoQuimico()));
-        pstmt.setString(10, dateToString(c.getFechaUltimaKeratina()));
-        pstmt.setString(11, dateToString(c.getFechaUltimoMantenimiento()));
+        int i = 1;
+        pstmt.setString(i++, c.getCedula());
+        pstmt.setString(i++, c.getNombreCompleto());
+        pstmt.setString(i++, c.getTelefono());
+        pstmt.setString(i++, c.getDireccion());
+        pstmt.setString(i++, c.getTipoCabello() != null ? c.getTipoCabello().name() : null);
+        pstmt.setString(i++, c.getTipoExtensiones());
+        pstmt.setString(i++, dateToString(c.getFechaCumpleanos()));
+        pstmt.setString(i++, dateToString(c.getFechaUltimoTinte()));
+        pstmt.setString(i++, dateToString(c.getFechaUltimoQuimico()));
+        pstmt.setString(i++, dateToString(c.getFechaUltimaKeratina()));
+        pstmt.setString(i++, dateToString(c.getFechaUltimoMantenimiento()));
+        pstmt.setInt(i++, c.isIntercambioActivo() ? 1 : 0);
+        pstmt.setString(i++, dateToString(c.getFechaVencimientoIntercambio()));
+    }
+
+    /* CORRECCIÓN #7: Cuenta dinámicamente los '?' en un SQL para evitar índices hardcodeados */
+    private static int countParameters(String sql) {
+        return (int) sql.chars().filter(ch -> ch == '?').count();
     }
 
     /**
@@ -344,7 +358,15 @@ public class ClienteRepositorySQLite implements ClienteRepository {
         c.setFechaUltimoQuimico(stringToDate(rs.getString("fecha_ultimo_quimico")));
         c.setFechaUltimaKeratina(stringToDate(rs.getString("fecha_ultima_keratina")));
         c.setFechaUltimoMantenimiento(stringToDate(rs.getString("fecha_ultimo_mantenimiento")));
-        
+
+        /* CORRECCIÓN #6: Leer campos intercambio que antes se ignoraban */
+        try {
+            c.setIntercambioActivo(rs.getInt("intercambio_activo") == 1);
+            c.setFechaVencimientoIntercambio(stringToDate(rs.getString("fecha_vencimiento_intercambio")));
+        } catch (SQLException ignored) {
+            // La columna puede no existir en DBs antiguas que no hayan ejecutado la migración
+        }
+
         return c;
     }
 

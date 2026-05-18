@@ -18,6 +18,7 @@ public class DatabaseException extends BaseException {
     
     public DatabaseException(String errorCode, String message, Throwable cause) {
         super(errorCode, message, cause);
+        logCreation(); // CORRECCIÓN #10: DatabaseException has no custom fields, safe to log immediately
     }
     
     @Override

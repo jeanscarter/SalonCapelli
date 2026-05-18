@@ -139,6 +139,7 @@ public class VentaService {
         return ventaRepository.findTasaBcvByFecha(fecha);
     }
 
+    /* CORRECCIÓN #1: Ventas a crédito — validación condicional de pagos según estatus */
     private void validarVenta(Venta venta) throws ValidationException {
         java.util.List<ValidationException.ValidationError> errors = new java.util.ArrayList<>();
 
@@ -146,11 +147,22 @@ public class VentaService {
             errors.add(new ValidationException.ValidationError("items", "La venta debe contener al menos un servicio (ítem)."));
         }
 
-        if (venta.getPagos() == null || venta.getPagos().isEmpty()) {
-            errors.add(new ValidationException.ValidationError("pagos", "Debe registrar al menos un pago."));
-        } else if (!venta.isPagada()) {
-            errors.add(new ValidationException.ValidationError("monto", String.format("El monto pagado (%.2f) no cubre el total de la venta (%.2f).", 
-                                            venta.getTotalPagado(), venta.getTotal())));
+        String estatus = venta.getEstatus();
+        boolean esCreditoOParcial = "PENDIENTE".equals(estatus) || "PARCIAL".equals(estatus);
+
+        if (esCreditoOParcial) {
+            // Ventas a crédito: pagos opcionales (puede haber 0 pagos o pago parcial)
+            // La UI ya validó con el usuario que acepta registrar como CxC
+            logger.debug("Venta con estatus '{}' — validación de pagos flexible", estatus);
+        } else {
+            // Ventas PAGADA (o sin estatus definido): pagos obligatorios y cobertura total
+            if (venta.getPagos() == null || venta.getPagos().isEmpty()) {
+                errors.add(new ValidationException.ValidationError("pagos", "Debe registrar al menos un pago."));
+            } else if (!venta.isPagada()) {
+                errors.add(new ValidationException.ValidationError("monto", String.format(
+                    "El monto pagado (%.2f) no cubre el total de la venta (%.2f).",
+                    venta.getTotalPagado(), venta.getTotal())));
+            }
         }
 
         if (!errors.isEmpty()) {

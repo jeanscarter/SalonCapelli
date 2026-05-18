@@ -10,6 +10,7 @@ public class TrabajadoraNotFoundException extends TrabajadoraException {
 
     private TrabajadoraNotFoundException(String message) {
         super(ERROR_CODE, message);
+        logCreation(); // CORRECCIÓN #10
     }
 
     @Override

@@ -34,8 +34,6 @@ public class DatabaseConnection {
 
     private static final Logger logger = LoggerFactory.getLogger(DatabaseConnection.class);
     private static final String URL = "jdbc:sqlite:salon_capelli.db";
-    private static volatile Connection instance;
-    private static final Object lock = new Object();
 
     // Bandera para saber si ya se inicializó el driver
     private static boolean driverLoaded = false;
@@ -55,9 +53,15 @@ public class DatabaseConnection {
     }
 
     /**
-     * Obtiene una conexión a la base de datos (Singleton con doble verificación)
+     * Crea una nueva conexión a la base de datos.
      * 
-     * @return Conexión activa a la base de datos
+     * CORRECCIÓN #2: Cada llamada crea una conexión fresca en lugar del
+     * patrón Singleton. Esto elimina race conditions entre hilos (ej:
+     * SwingWorker vs EDT) donde un hilo modificaba autoCommit mientras
+     * otro usaba la misma conexión. El llamador DEBE cerrar la conexión
+     * con try-with-resources.
+     * 
+     * @return Nueva conexión configurada a la base de datos
      * @throws DatabaseException si no se puede conectar
      */
     public static Connection connect() throws DatabaseException {
@@ -67,26 +71,18 @@ public class DatabaseConnection {
         }
 
         try {
-            if (instance == null || instance.isClosed()) {
-                synchronized (lock) {
-                    if (instance == null || instance.isClosed()) {
-                        logger.debug("Creando nueva conexión a la base de datos: {}", URL);
-                        instance = DriverManager.getConnection(URL);
-                        instance.setAutoCommit(true);
+            Connection conn = DriverManager.getConnection(URL);
+            conn.setAutoCommit(true);
 
-                        // Configuraciones de SQLite para mejor rendimiento
-                        try (Statement stmt = instance.createStatement()) {
-                            stmt.execute("PRAGMA journal_mode=WAL"); // Write-Ahead Logging
-                            stmt.execute("PRAGMA foreign_keys=ON");
-                            stmt.execute("PRAGMA synchronous=NORMAL");
-                            logger.debug("Configuraciones de SQLite aplicadas (WAL, FK, SYNC)");
-                        }
-
-                        logger.info("Conexión a la base de datos establecida exitosamente");
-                    }
-                }
+            // Configuraciones de SQLite aplicadas en cada conexión nueva
+            try (Statement stmt = conn.createStatement()) {
+                stmt.execute("PRAGMA journal_mode=WAL");
+                stmt.execute("PRAGMA foreign_keys=ON");
+                stmt.execute("PRAGMA synchronous=NORMAL");
             }
-            return instance;
+
+            logger.info("Conexión a la base de datos establecida exitosamente");
+            return conn;
 
         } catch (SQLException e) {
             logger.error("Error al conectar con la base de datos: {}", e.getMessage(), e);
@@ -296,6 +292,7 @@ public class DatabaseConnection {
                     total REAL NOT NULL,
                     tasa_bcv REAL DEFAULT 0.0,
                     numero_correlativo TEXT,
+                    estatus TEXT DEFAULT 'PAGADA',
                     FOREIGN KEY (cliente_id) REFERENCES clientes(id)
                 )""";
 
@@ -576,33 +573,19 @@ public class DatabaseConnection {
     }
 
     /**
-     * Cierra la conexión a la base de datos
+     * CORRECCIÓN #2: Con el patrón connection-per-call, no hay singleton que cerrar.
+     * Cada conexión se cierra en el try-with-resources del llamador.
+     * Se mantiene el método por compatibilidad con registerShutdownHook().
      */
     public static void close() {
-        if (instance != null) {
-            try {
-                logger.info("Cerrando conexión a la base de datos...");
-                instance.close();
-                instance = null;
-                logger.info("✓ Conexión cerrada exitosamente");
-            } catch (SQLException e) {
-                logger.error("Error al cerrar la conexión a la base de datos", e);
-            }
-        }
+        logger.info("DatabaseConnection.close() invocado (connection-per-call: no-op)");
     }
 
     /**
-     * Verifica si hay una conexión activa
-     * 
-     * @return true si hay conexión activa, false en caso contrario
+     * CORRECCIÓN #2: Verifica si el driver está cargado (no hay singleton).
      */
     public static boolean isConnected() {
-        try {
-            return instance != null && !instance.isClosed();
-        } catch (SQLException e) {
-            logger.warn("Error verificando estado de conexión", e);
-            return false;
-        }
+        return driverLoaded;
     }
 
     /**

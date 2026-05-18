@@ -1,18 +1,26 @@
 package app.service;
 
-import app.db.DatabaseConnection;
 import app.model.Usuario;
+import app.repository.UsuarioRepository;
+import app.repository.UsuarioRepositorySQLite;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
-import java.sql.Connection;
-import java.sql.PreparedStatement;
-import java.sql.ResultSet;
-import java.sql.SQLException;
-import java.time.LocalDateTime;
 
+/**
+ * Servicio de autenticación del sistema.
+ *
+ * CORRECCIÓN #13: Eliminado SQL directo — ahora delega a UsuarioRepository.
+ * La verificación del hash sigue en esta capa (servicio), no en el repositorio.
+ */
 public class AuthService {
 
+    private static final Logger logger = LoggerFactory.getLogger(AuthService.class);
+
     private static Usuario currentUser;
+    private static final UsuarioRepository usuarioRepo = new UsuarioRepositorySQLite();
 
     public static Usuario getCurrentUser() {
         return currentUser;
@@ -22,57 +30,51 @@ public class AuthService {
         currentUser = null;
     }
 
+    /**
+     * Autentica un usuario por username y contraseña.
+     * CORRECCIÓN #13: Usa UsuarioRepository en lugar de SQL directo.
+     */
     public static boolean authenticate(String username, String password) {
-        String hashed = hashPassword(password);
-        String sql = "SELECT * FROM usuarios WHERE username = ? AND password_hash = ? AND activo = 1";
-        
-        try (Connection conn = DatabaseConnection.connect();
-             PreparedStatement pstmt = conn.prepareStatement(sql)) {
-             
-            pstmt.setString(1, username);
-            pstmt.setString(2, hashed);
-            
-            try (ResultSet rs = pstmt.executeQuery()) {
-                if (rs.next()) {
-                    Usuario u = new Usuario();
-                    u.setId(rs.getInt("id"));
-                    u.setUsername(rs.getString("username"));
-                    u.setRol(rs.getString("rol"));
-                    u.setActivo(rs.getInt("activo") == 1);
-                    String dateStr = rs.getString("fecha_creacion");
-                    if (dateStr != null) {
-                        u.setFechaCreacion(LocalDateTime.parse(dateStr.replace(" ", "T")));
-                    }
-                    currentUser = u;
-                    return true;
-                }
+        try {
+            Usuario u = usuarioRepo.findByUsername(username);
+            if (u == null || !u.isActivo()) {
+                return false;
             }
-        } catch (SQLException | app.exception.DatabaseException e) {
-            e.printStackTrace();
-        }
-        return false;
-    }
-    
-    public static boolean authenticateAdmin(String password) {
-        String hashed = hashPassword(password);
-        String sql = "SELECT * FROM usuarios WHERE rol = 'ADMIN' AND password_hash = ? AND activo = 1";
-        
-        try (Connection conn = DatabaseConnection.connect();
-             PreparedStatement pstmt = conn.prepareStatement(sql)) {
-             
-            pstmt.setString(1, hashed);
-            
-            try (ResultSet rs = pstmt.executeQuery()) {
-                if (rs.next()) {
-                    return true;
-                }
+
+            String hashed = hashPassword(password);
+            if (hashed.equals(u.getPasswordHash())) {
+                currentUser = u;
+                return true;
             }
-        } catch (SQLException | app.exception.DatabaseException e) {
-            e.printStackTrace();
+        } catch (Exception e) {
+            logger.error("Error durante autenticación", e);
         }
         return false;
     }
 
+    /**
+     * Verifica si una contraseña corresponde a algún usuario ADMIN activo.
+     * CORRECCIÓN #13: Usa UsuarioRepository para buscar admins.
+     */
+    public static boolean authenticateAdmin(String password) {
+        String hashed = hashPassword(password);
+        try {
+            for (Usuario u : usuarioRepo.findAll()) {
+                if ("ADMIN".equals(u.getRol()) && u.isActivo() && hashed.equals(u.getPasswordHash())) {
+                    return true;
+                }
+            }
+        } catch (Exception e) {
+            logger.error("Error durante autenticación admin", e);
+        }
+        return false;
+    }
+
+    /**
+     * Hash SHA-256 de una contraseña.
+     * Nota: Se mantiene SHA-256 sin salt por compatibilidad con datos existentes.
+     * Una migración futura a PBKDF2 requeriría migración de hashes en DB.
+     */
     public static String hashPassword(String password) {
         try {
             MessageDigest md = MessageDigest.getInstance("SHA-256");

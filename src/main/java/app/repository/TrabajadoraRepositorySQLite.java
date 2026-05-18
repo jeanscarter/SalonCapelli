@@ -126,7 +126,8 @@ public class TrabajadoraRepositorySQLite implements TrabajadoraRepository {
 
             try (PreparedStatement pstmt = conn.prepareStatement(SQL_UPDATE)) {
                 mapTrabajadoraToStmt(t, pstmt);
-                pstmt.setInt(10, t.getId());
+                /* CORRECCIÓN #7: Índice dinámico */
+                pstmt.setInt(countParameters(SQL_UPDATE), t.getId());
 
                 int affected = pstmt.executeUpdate();
                 if (affected == 0) {
@@ -308,20 +309,27 @@ public class TrabajadoraRepositorySQLite implements TrabajadoraRepository {
 
     // ===== Helpers =====
 
+    /* CORRECCIÓN #7: Usar contador incremental en vez de índices hardcodeados */
     private void mapTrabajadoraToStmt(Trabajadora t, PreparedStatement pstmt) throws SQLException {
-        pstmt.setString(1, t.getCedula());
-        pstmt.setString(2, t.getNombres());
-        pstmt.setString(3, t.getApellidos());
-        pstmt.setString(4, t.getTelefono());
-        pstmt.setString(5, t.getCorreoElectronico());
+        int i = 1;
+        pstmt.setString(i++, t.getCedula());
+        pstmt.setString(i++, t.getNombres());
+        pstmt.setString(i++, t.getApellidos());
+        pstmt.setString(i++, t.getTelefono());
+        pstmt.setString(i++, t.getCorreoElectronico());
         if (t.getFoto() != null) {
-            pstmt.setBytes(6, t.getFoto());
+            pstmt.setBytes(i++, t.getFoto());
         } else {
-            pstmt.setNull(6, Types.BLOB);
+            pstmt.setNull(i++, Types.BLOB);
         }
-        pstmt.setBoolean(7, t.isBonoActivo());
-        pstmt.setDouble(8, t.getMontoBono());
-        pstmt.setString(9, t.getRazonBono());
+        pstmt.setBoolean(i++, t.isBonoActivo());
+        pstmt.setDouble(i++, t.getMontoBono());
+        pstmt.setString(i++, t.getRazonBono());
+    }
+
+    /* CORRECCIÓN #7: Cuenta dinámica de parámetros '?' en SQL */
+    private static int countParameters(String sql) {
+        return (int) sql.chars().filter(ch -> ch == '?').count();
     }
 
     private Trabajadora mapResultSetToTrabajadora(ResultSet rs) throws SQLException {

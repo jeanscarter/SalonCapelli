@@ -11,6 +11,7 @@ public class TrabajadoraDuplicadaException extends TrabajadoraException {
     public TrabajadoraDuplicadaException(String cedula) {
         super(ERROR_CODE, "Ya existe una trabajadora con la cédula: %s", cedula);
         this.cedula = cedula;
+        logCreation(); // CORRECCIÓN #10
     }
 
     @Override

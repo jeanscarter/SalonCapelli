@@ -103,6 +103,9 @@ public class VentaView extends JPanel {
     private static final double IVA_RATE = 0.16;
     private boolean ivaExento = false;
 
+    /* CORRECCIÓN #9: Tasa BCV capturada una sola vez al construir la vista */
+    private double tasaBcvCapturada;
+
     // === FASE 3: Propinas ===
     private JComboBox<Trabajadora> cbTrabajadoraPropina;
     private JTextField txtMontoPropina;
@@ -120,6 +123,8 @@ public class VentaView extends JPanel {
         this.cuentaReceptoraRepo = new CuentaReceptoraRepositorySQLite();
         this.ventaService = new VentaService();
         this.ventaActual = new Venta();
+        /* CORRECCIÓN #9: Capturar tasa una única vez */
+        this.tasaBcvCapturada = BCVService.getCachedRate();
 
         init();
         loadCombos();
@@ -141,7 +146,8 @@ public class VentaView extends JPanel {
         lblNumeroFactura.putClientProperty(FlatClientProperties.STYLE, "font:bold +8; foreground:$Component.accentColor");
         pnlHeader.add(lblNumeroFactura);
 
-        lblTasaBcvActual = new JLabel("Tasa BCV: " + String.format("%.2f", BCVService.getCachedRate()));
+        /* CORRECCIÓN #9: Usar tasa capturada */
+        lblTasaBcvActual = new JLabel("Tasa Ref: " + String.format("%.2f", tasaBcvCapturada));
         lblTasaBcvActual.putClientProperty(FlatClientProperties.STYLE, "font:bold +2");
         pnlHeader.add(lblTasaBcvActual);
 
@@ -561,8 +567,8 @@ public class VentaView extends JPanel {
         lblIva.setText(ivaExento ? "IVA: EXENTO" : String.format("IVA (16%%): $ %.2f", iva));
         lblTotal.setText(String.format("Total USD: $ %.2f", ventaActual.getTotal()));
         
-        double rate = BCVService.getCachedRate();
-        lblTotalBS.setText(String.format("Total Bs: %.2f", ventaActual.getTotal() * rate));
+        /* CORRECCIÓN #9: Usar tasa capturada consistentemente */
+        lblTotalBS.setText(String.format("Total Bs: %.2f", ventaActual.getTotal() * tasaBcvCapturada));
 
         btnProcesarVenta.setEnabled(!ventaActual.getItems().isEmpty());
         
@@ -1197,7 +1203,8 @@ public class VentaView extends JPanel {
 
     private void actualizarSaldoRestante() {
         double totalPagado = 0;
-        double rate = BCVService.getCachedRate();
+        /* CORRECCIÓN #9: Usar tasa capturada */
+        double rate = tasaBcvCapturada;
         for (int i = 0; i < tblPagosModel.getRowCount(); i++) {
             double monto = (Double) tblPagosModel.getValueAt(i, 2);
             String moneda = (String) tblPagosModel.getValueAt(i, 1);

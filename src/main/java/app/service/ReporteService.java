@@ -206,12 +206,11 @@ public class ReporteService {
 
     /**
      * Determina si un método de pago es "Efectivo" con coincidencia flexible.
-     * Soporta: "Efectivo", "Efectivo $", "EFECTIVO", "efectivo", etc.
+     * Soporta: "Efectivo", "Efectivo $", "EFECTIVO", "efectivo", "Efectivo$", etc.
      */
     private boolean esEfectivo(String metodo) {
         if (metodo == null) return false;
-        String m = metodo.trim().toLowerCase();
-        return m.equals("efectivo") || m.startsWith("efectivo ");
+        return metodo.trim().toLowerCase().contains("efectivo");
     }
 
     /**
@@ -221,8 +220,7 @@ public class ReporteService {
     private boolean esZelleOTransferenciaUsd(String metodo) {
         if (metodo == null) return false;
         String m = metodo.trim().toLowerCase();
-        return m.equals("zelle") || m.startsWith("zelle ") ||
-               m.equals("transferencia") || m.startsWith("transferencia ");
+        return m.contains("zelle") || m.contains("transferencia");
     }
 
     // ================================================================
