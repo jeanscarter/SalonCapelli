@@ -70,7 +70,7 @@ public class CuentaPorCobrarRepositorySQLite implements CuentaPorCobrarRepositor
     @Override
     public List<CuentaPorCobrar> findAll() throws DatabaseException {
         List<CuentaPorCobrar> list = new ArrayList<>();
-        String sql = "SELECT c.*, cl.nombres || ' ' || cl.apellidos AS nombreCliente, v.numero_correlativo AS numeroFactura " +
+        String sql = "SELECT c.*, cl.nombre_completo AS nombreCliente, v.numero_correlativo AS numeroFactura " +
                      "FROM cuentas_por_cobrar c " +
                      "JOIN clientes cl ON c.cliente_id = cl.id " +
                      "JOIN ventas v ON c.venta_id = v.id ORDER BY c.fecha_creacion DESC";
@@ -126,7 +126,7 @@ public class CuentaPorCobrarRepositorySQLite implements CuentaPorCobrarRepositor
     @Override
     public List<CuentaPorCobrar> findByClienteId(int clienteId) throws DatabaseException {
         List<CuentaPorCobrar> list = new ArrayList<>();
-        String sql = "SELECT c.*, cl.nombres || ' ' || cl.apellidos AS nombreCliente, v.numero_correlativo AS numeroFactura " +
+        String sql = "SELECT c.*, cl.nombre_completo AS nombreCliente, v.numero_correlativo AS numeroFactura " +
                      "FROM cuentas_por_cobrar c " +
                      "JOIN clientes cl ON c.cliente_id = cl.id " +
                      "JOIN ventas v ON c.venta_id = v.id WHERE c.cliente_id = ? ORDER BY c.fecha_creacion DESC";
@@ -150,7 +150,7 @@ public class CuentaPorCobrarRepositorySQLite implements CuentaPorCobrarRepositor
     @Override
     public List<CuentaPorCobrar> findPendientes() throws DatabaseException {
         List<CuentaPorCobrar> list = new ArrayList<>();
-        String sql = "SELECT c.*, cl.nombres || ' ' || cl.apellidos AS nombreCliente, v.numero_correlativo AS numeroFactura " +
+        String sql = "SELECT c.*, cl.nombre_completo AS nombreCliente, v.numero_correlativo AS numeroFactura " +
                      "FROM cuentas_por_cobrar c " +
                      "JOIN clientes cl ON c.cliente_id = cl.id " +
                      "JOIN ventas v ON c.venta_id = v.id WHERE c.estatus IN ('PENDIENTE', 'PARCIAL') ORDER BY c.fecha_creacion ASC";

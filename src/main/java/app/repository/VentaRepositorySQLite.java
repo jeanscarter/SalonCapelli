@@ -430,6 +430,15 @@ public class VentaRepositorySQLite implements VentaRepository {
         venta.setNumeroCorrelativo(rs.getString("numero_correlativo"));
 
         try {
+            String estatus = rs.getString("estatus");
+            if (estatus != null) {
+                venta.setEstatus(estatus);
+            }
+        } catch (SQLException ignored) {
+            // estatus puede no estar en queries legacy
+        }
+
+        try {
             venta.setNombreCliente(rs.getString("nombre_cliente"));
         } catch (SQLException ignored) {
             // nombre_cliente no está en todos los queries

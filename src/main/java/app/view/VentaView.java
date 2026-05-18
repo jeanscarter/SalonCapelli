@@ -46,6 +46,7 @@ public class VentaView extends JPanel {
     private final TrabajadoraRepository trabajadoraRepo;
     private final ServicioRepository servicioRepo;
     private final ClienteRepository clienteRepo;
+    private final CuentaReceptoraRepository cuentaReceptoraRepo;
     private final VentaService ventaService;
 
     // === FASE 1: Búsqueda de Cliente ===
@@ -81,9 +82,8 @@ public class VentaView extends JPanel {
     private JComboBox<String> cbMonedaPago;
     private JTextField txtMontoPago;
     private JTextField txtReferenciaPago;
-    private JPanel panelPagoMovil;
-    private JComboBox<String> cbDestinoPM;
-    private JComboBox<String> cbBancoRosa;
+    private JPanel panelCuentaDestino;
+    private JComboBox<app.model.CuentaReceptora> cbCuentaDestino;
     private JTable tblPagos;
     private DefaultTableModel tblPagosModel;
     private JLabel lblSaldoRestante;
@@ -117,6 +117,7 @@ public class VentaView extends JPanel {
         this.trabajadoraRepo = new TrabajadoraRepositorySQLite();
         this.servicioRepo = new ServicioRepositorySQLite();
         this.clienteRepo = new ClienteRepositorySQLite();
+        this.cuentaReceptoraRepo = new CuentaReceptoraRepositorySQLite();
         this.ventaService = new VentaService();
         this.ventaActual = new Venta();
 
@@ -1045,17 +1046,27 @@ public class VentaView extends JPanel {
         row2.add(txtReferenciaPago);
         panel.add(row2);
 
-        // Fila 3: Destino Pago Móvil (visible solo si es PagoMóvil/Transferencia)
-        panelPagoMovil = new JPanel(new MigLayout("insets 0, fillx", "[grow, fill]5[grow, fill]", "[]"));
-        panelPagoMovil.setOpaque(false);
-        panelPagoMovil.setVisible(false);
-        cbDestinoPM = new JComboBox<>(new String[]{"Rosa", "Jean"});
-        cbDestinoPM.putClientProperty(FlatClientProperties.STYLE, "arc:8");
-        panelPagoMovil.add(cbDestinoPM);
-        cbBancoRosa = new JComboBox<>(new String[]{"Banesco", "Mercantil", "Venezuela", "Provincial"});
-        cbBancoRosa.putClientProperty(FlatClientProperties.STYLE, "arc:8");
-        panelPagoMovil.add(cbBancoRosa);
-        panel.add(panelPagoMovil);
+        // Fila 3: Selector dinámico de Cuenta Receptora (poblado desde DB)
+        panelCuentaDestino = new JPanel(new MigLayout("insets 0, fillx", "[grow, fill]", "[]"));
+        panelCuentaDestino.setOpaque(false);
+        panelCuentaDestino.setVisible(false);
+
+        cbCuentaDestino = new JComboBox<>();
+        cbCuentaDestino.putClientProperty(FlatClientProperties.STYLE, "arc:8");
+        cbCuentaDestino.setRenderer(new DefaultListCellRenderer() {
+            @Override
+            public java.awt.Component getListCellRendererComponent(JList<?> list, Object value, int index, boolean isSelected, boolean cellHasFocus) {
+                super.getListCellRendererComponent(list, value, index, isSelected, cellHasFocus);
+                if (value instanceof app.model.CuentaReceptora cr) {
+                    setText(cr.getAliasReferencia() + " (" + cr.getNombreCuenta() + ")");
+                } else if (value == null) {
+                    setText("-- Seleccionar cuenta --");
+                }
+                return this;
+            }
+        });
+        panelCuentaDestino.add(cbCuentaDestino);
+        panel.add(panelCuentaDestino);
 
         // Botón agregar pago
         JButton btnAgregarPago = new JButton("+ Agregar Pago");
@@ -1091,11 +1102,48 @@ public class VentaView extends JPanel {
         return panel;
     }
 
+    /**
+     * Cuando cambia el método de pago, muestra/oculta el selector de cuenta destino.
+     * Para Efectivo: oculto (va a "Efectivo Caja" automáticamente).
+     * Para Zelle, PagoMóvil, Transferencia, PdV: muestra el combo filtrado por plataforma.
+     */
     private void onMetodoPagoChanged() {
         String method = (String) cbMetodoPago.getSelectedItem();
-        boolean showDest = "Pago Móvil".equals(method) || "Transferencia".equals(method);
-        panelPagoMovil.setVisible(showDest);
+        boolean needsDestination = !"Efectivo".equals(method);
+        panelCuentaDestino.setVisible(needsDestination);
+
+        if (needsDestination) {
+            cargarCuentasDestino(method);
+        }
         revalidate();
+    }
+
+    /**
+     * Carga dinámicamente las cuentas receptoras filtradas por la plataforma del método de pago.
+     */
+    private void cargarCuentasDestino(String metodoPago) {
+        cbCuentaDestino.removeAllItems();
+        try {
+            // Mapear método de pago del combo a la plataforma en BD
+            String plataforma = switch (metodoPago) {
+                case "Zelle" -> "Zelle";
+                case "Pago Móvil" -> "Pago Móvil";
+                case "Transferencia" -> "Transferencia";
+                case "Punto de Venta" -> "Punto de Venta";
+                default -> metodoPago;
+            };
+
+            java.util.List<app.model.CuentaReceptora> cuentas = cuentaReceptoraRepo.findByPlataforma(plataforma);
+            for (app.model.CuentaReceptora cr : cuentas) {
+                cbCuentaDestino.addItem(cr);
+            }
+
+            if (cuentas.isEmpty()) {
+                logger.debug("No se encontraron cuentas receptoras para plataforma: {}", plataforma);
+            }
+        } catch (app.exception.DatabaseException e) {
+            logger.error("Error al cargar cuentas destino para método: {}", metodoPago, e);
+        }
     }
 
     private void agregarPago() {
@@ -1119,10 +1167,13 @@ public class VentaView extends JPanel {
         String referencia = txtReferenciaPago.getText().trim();
 
         String destino = "";
-        if (panelPagoMovil.isVisible()) {
-            String dest = (String) cbDestinoPM.getSelectedItem();
-            String banco = (String) cbBancoRosa.getSelectedItem();
-            destino = dest + " - " + banco;
+        if ("Efectivo".equals(metodo)) {
+            destino = "Efectivo Caja";
+        } else if (panelCuentaDestino.isVisible()) {
+            app.model.CuentaReceptora selected = (app.model.CuentaReceptora) cbCuentaDestino.getSelectedItem();
+            if (selected != null) {
+                destino = selected.getAliasReferencia();
+            }
         }
 
         tblPagosModel.addRow(new Object[]{metodo, moneda, monto, destino, referencia});

@@ -54,8 +54,8 @@ public class MyDrawerBuilder extends SimpleDrawerBuilder {
 
         Map<String, Supplier<Component>> navigationMap = new HashMap<>();
         navigationMap.put("Dashboard", () -> new app.view.HomeView());
-        navigationMap.put("Ventas por Día", () -> new JLabel("VISTA: Ventas por Día"));
-        navigationMap.put("Reporte Semanal", () -> new JLabel("VISTA: Reporte Semanal"));
+        navigationMap.put("Ventas por Día", () -> new app.view.ReporteDiarioView());
+        navigationMap.put("Reporte Semanal", () -> new app.view.ReporteSemanalView());
         navigationMap.put("Clientes", () -> new app.view.ClientesView());
         navigationMap.put("Trabajadoras", () -> new app.view.TrabajadorasView());
         navigationMap.put("Servicios", () -> new app.view.ServiciosView());
@@ -63,6 +63,7 @@ public class MyDrawerBuilder extends SimpleDrawerBuilder {
         navigationMap.put("Calcular Nómina", () -> new JLabel("VISTA: Cálculo de Nómina"));
         navigationMap.put("Facturación", () -> new app.view.VentaView());
         navigationMap.put("Cuentas por Cobrar", () -> new app.view.CuentasPorCobrarView());
+        navigationMap.put("Usuarios", () -> new app.view.UsuariosView());
 
         MenuItem[] items = new MenuItem[] {
                 new Item("Dashboard"),
@@ -80,7 +81,10 @@ public class MyDrawerBuilder extends SimpleDrawerBuilder {
                 new Item("Comisiones"),
                 new Item("Calcular Nómina"),
                 new Item("Facturación"),
-                new Item("Cuentas por Cobrar")
+                new Item("Cuentas por Cobrar"),
+
+                new Item.Label("ADMINISTRACIÓN"),
+                new Item("Usuarios")
         };
 
         MenuOption option = new MenuOption();

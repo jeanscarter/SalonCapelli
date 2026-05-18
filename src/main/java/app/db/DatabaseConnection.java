@@ -386,6 +386,23 @@ public class DatabaseConnection {
         String sqlUsuarios2 = "CREATE INDEX IF NOT EXISTS idx_usuarios_username ON usuarios(username)";
 
         // =====================================================================
+        // MÓDULO: CUENTAS RECEPTORAS (Fase Reportes)
+        // Cuentas donde el salón recibe dinero de los clientes.
+        // Diferente de cuentas_bancarias (cuentas de empleadas para nómina).
+        // =====================================================================
+
+        String sqlCuentasReceptoras1 = """
+                CREATE TABLE IF NOT EXISTS cuentas_receptoras (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    nombre_cuenta TEXT NOT NULL,
+                    banco_plataforma TEXT NOT NULL,
+                    alias_referencia TEXT NOT NULL,
+                    activa INTEGER DEFAULT 1
+                )""";
+
+        String sqlCuentasReceptoras2 = "CREATE INDEX IF NOT EXISTS idx_cuentas_rec_plataforma ON cuentas_receptoras(banco_plataforma)";
+
+        // =====================================================================
         // MÓDULO: CONFIGURACIÓN
         // =====================================================================
 
@@ -519,6 +536,10 @@ public class DatabaseConnection {
             // App Settings
             stmt.execute(sqlSettings1);
 
+            // Cuentas Receptoras
+            stmt.execute(sqlCuentasReceptoras1);
+            stmt.execute(sqlCuentasReceptoras2);
+
             // Usuarios
             stmt.execute(sqlUsuarios1);
             stmt.execute(sqlUsuarios2);
@@ -531,10 +552,21 @@ public class DatabaseConnection {
             stmt.execute("INSERT OR IGNORE INTO app_settings (setting_key, setting_value) VALUES ('correlativo', '1')");
             stmt.execute("INSERT OR IGNORE INTO app_settings (setting_key, setting_value) VALUES ('tasa_bcv', '0.0')");
 
+            // Seed: Cuentas Receptoras del Salón
+            stmt.execute("INSERT OR IGNORE INTO cuentas_receptoras (id, nombre_cuenta, banco_plataforma, alias_referencia) VALUES (1, 'Cuenta Capelli', 'Zelle', 'Zelle Default')");
+            stmt.execute("INSERT OR IGNORE INTO cuentas_receptoras (id, nombre_cuenta, banco_plataforma, alias_referencia) VALUES (2, 'Cuenta Rosa', 'Zelle', 'Zelle Hotmail')");
+            stmt.execute("INSERT OR IGNORE INTO cuentas_receptoras (id, nombre_cuenta, banco_plataforma, alias_referencia) VALUES (3, 'Cuenta Rosa', 'Zelle', 'Zelle Ingrid')");
+            stmt.execute("INSERT OR IGNORE INTO cuentas_receptoras (id, nombre_cuenta, banco_plataforma, alias_referencia) VALUES (4, 'Cuenta Capelli', 'Punto de Venta', 'PdV Capelli')");
+            stmt.execute("INSERT OR IGNORE INTO cuentas_receptoras (id, nombre_cuenta, banco_plataforma, alias_referencia) VALUES (5, 'Cuenta Capelli', 'Pago Móvil', 'PM Capelli')");
+            stmt.execute("INSERT OR IGNORE INTO cuentas_receptoras (id, nombre_cuenta, banco_plataforma, alias_referencia) VALUES (6, 'Cuenta Rosa', 'Pago Móvil', 'PM Rosa')");
+            stmt.execute("INSERT OR IGNORE INTO cuentas_receptoras (id, nombre_cuenta, banco_plataforma, alias_referencia) VALUES (7, 'Cuenta Capelli', 'Transferencia', 'Transferencia Capelli')");
+            stmt.execute("INSERT OR IGNORE INTO cuentas_receptoras (id, nombre_cuenta, banco_plataforma, alias_referencia) VALUES (8, 'Cuenta Rosa', 'Transferencia', 'Transferencia Rosa')");
+            stmt.execute("INSERT OR IGNORE INTO cuentas_receptoras (id, nombre_cuenta, banco_plataforma, alias_referencia) VALUES (9, 'Efectivo', 'Efectivo', 'Efectivo Caja')");
+
             logger.info("✓ Base de datos SQLite inicializada correctamente");
             logger.info("✓ Tablas verificadas/creadas: clientes, trabajadoras, cuentas_bancarias, " +
-                    "servicios, reglas_comision, reglas_comision_detalladas, marcas, productos, " +
-                    "inventario_movimientos, ventas, venta_items, venta_pagos, propinas, app_settings");
+                    "cuentas_receptoras, servicios, reglas_comision, reglas_comision_detalladas, marcas, productos, " +
+                    "inventario_movimientos, ventas, venta_items, venta_pagos, propinas, app_settings, usuarios");
             logger.info("✓ Índices creados/verificados");
 
         } catch (SQLException e) {
