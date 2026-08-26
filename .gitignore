@@ -22,3 +22,14 @@ dependency-reduced-pom.xml
 /salon_capelli.db
 salon_capelli.db-wal
 salon_capelli.db-shm
+.vscode/launch.json
+.vscode/settings.json
+
+# Credenciales y Configuración Local
+.env
+config.properties
+*.key
+credentials.json
+options.txt
+sources.txt
+run_opts.txt

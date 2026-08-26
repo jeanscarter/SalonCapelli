@@ -1,8 +1,7 @@
 package app.view;
 
-import app.exception.DatabaseException;
+import app.service.BCVService;
 import app.service.DashboardService;
-import app.util.ToastNotification;
 import com.formdev.flatlaf.FlatClientProperties;
 import net.miginfocom.swing.MigLayout;
 import org.slf4j.Logger;
@@ -44,7 +43,7 @@ public class HomeView extends JPanel {
 
         lblBcvRate = new JLabel("Cargando...");
         lblBcvRate.putClientProperty(FlatClientProperties.STYLE, "font:bold +10; foreground:$Component.accentColor");
-        pnlKpis.add(createCard("Tasa BCV Actual (USD/Bs)", lblBcvRate, "$Component.accentColor"));
+        pnlKpis.add(createCard("Tasa Euro Oficial (EUR/Bs)", lblBcvRate, "$Component.accentColor"));
 
         lblTotalIngreso = new JLabel("Cargando...");
         lblTotalIngreso.putClientProperty(FlatClientProperties.STYLE, "font:bold +10; foreground:$Success.color");
@@ -89,61 +88,100 @@ public class HomeView extends JPanel {
         return card;
     }
 
+    private record DashboardData(
+            double tasaBcv,
+            double ingresosHoy,
+            Map<String, Integer> topServicios,
+            Map<String, Double> produccion
+    ) {}
+
     private void loadData() {
-        logger.info("Cargando datos del dashboard...");
+        logger.info("Iniciando carga asíncrona de datos del dashboard...");
         
-        // Cargar Tasa BCV (En un hilo separado para no bloquear la UI si la API es lenta)
-        SwingWorker<Double, Void> workerBcv = new SwingWorker<>() {
-            @Override
-            protected Double doInBackground() {
-                return dashboardService.getTasaBCV();
-            }
-            @Override
-            protected void done() {
-                try {
-                    lblBcvRate.setText(String.format("Bs. %.2f", get()));
-                } catch (Exception e) {
-                    lblBcvRate.setText("Error");
-                }
-            }
-        };
-        workerBcv.execute();
+        lblBcvRate.setText("Cargando...");
+        lblTotalIngreso.setText("Calculando...");
 
         LocalDate hoy = LocalDate.now();
         LocalDate inicioMes = hoy.withDayOfMonth(1);
 
-        try {
-            // Ingresos Hoy
-            double ingresosHoy = dashboardService.getIngresoTotal(hoy, hoy);
-            lblTotalIngreso.setText(String.format("$ %.2f", ingresosHoy));
+        SwingWorker<DashboardData, Void> worker = new SwingWorker<>() {
+            @Override
+            protected DashboardData doInBackground() {
+                double tasa = BCVService.getCachedRate();
+                try {
+                    double tasaLive = dashboardService.getTasaBCV();
+                    if (tasaLive > 0) tasa = tasaLive;
+                } catch (Exception ignored) {}
 
-            // Top Servicios
-            Map<String, Integer> topServicios = dashboardService.getTopServicios(inicioMes, hoy);
-            for (Map.Entry<String, Integer> entry : topServicios.entrySet()) {
-                topServiciosPanel.add(new JLabel(entry.getKey()));
-                JLabel lblCant = new JLabel(entry.getValue() + " unds");
-                lblCant.putClientProperty(FlatClientProperties.STYLE, "font:bold");
-                topServiciosPanel.add(lblCant, "wrap");
-            }
-            if (topServicios.isEmpty()) {
-                topServiciosPanel.add(new JLabel("Sin datos registrados en el mes."), "span");
-            }
+                double ingresos = 0.0;
+                Map<String, Integer> topSrv = Map.of();
+                Map<String, Double> prod = Map.of();
 
-            // Producción Hoy
-            Map<String, Double> produccion = dashboardService.getProduccionPorTrabajadora(hoy, hoy);
-            for (Map.Entry<String, Double> entry : produccion.entrySet()) {
-                produccionPanel.add(new JLabel(entry.getKey()));
-                JLabel lblProd = new JLabel(String.format("$ %.2f", entry.getValue()));
-                lblProd.putClientProperty(FlatClientProperties.STYLE, "font:bold; foreground:$Success.color");
-                produccionPanel.add(lblProd, "wrap");
-            }
-            if (produccion.isEmpty()) {
-                produccionPanel.add(new JLabel("Sin producción registrada hoy."), "span");
+                try {
+                    ingresos = dashboardService.getIngresoTotal(hoy, hoy);
+                    topSrv = dashboardService.getTopServicios(inicioMes, hoy);
+                    prod = dashboardService.getProduccionPorTrabajadora(hoy, hoy);
+                } catch (Exception e) {
+                    logger.error("Error al calcular métricas del dashboard en background", e);
+                }
+
+                return new DashboardData(tasa, ingresos, topSrv, prod);
             }
 
-        } catch (DatabaseException e) {
-            logger.error("Error cargando métricas", e);
-            ToastNotification.showError(this, "Error de Datos", "No se pudieron cargar algunas estadísticas.");
-        }
+            @Override
+            protected void done() {
+                try {
+                    DashboardData data = get();
+
+                    // 1. Tasa BCV
+                    lblBcvRate.setText(String.format("Bs. %.2f", data.tasaBcv()));
+
+                    // 2. Ingresos Hoy
+                    lblTotalIngreso.setText(String.format("$ %.2f", data.ingresosHoy()));
+
+                    // 3. Top Servicios
+                    topServiciosPanel.removeAll();
+                    JLabel lblTopServicios = new JLabel("Top 5 Servicios (Este Mes)");
+                    lblTopServicios.putClientProperty(FlatClientProperties.STYLE, "font:bold +2");
+                    topServiciosPanel.add(lblTopServicios, "span, wrap");
+
+                    for (Map.Entry<String, Integer> entry : data.topServicios().entrySet()) {
+                        topServiciosPanel.add(new JLabel(entry.getKey()));
+                        JLabel lblCant = new JLabel(entry.getValue() + " unds");
+                        lblCant.putClientProperty(FlatClientProperties.STYLE, "font:bold");
+                        topServiciosPanel.add(lblCant, "wrap");
+                    }
+                    if (data.topServicios().isEmpty()) {
+                        topServiciosPanel.add(new JLabel("Sin datos registrados en el mes."), "span");
+                    }
+
+                    // 4. Producción Hoy
+                    produccionPanel.removeAll();
+                    JLabel lblProduccion = new JLabel("Producción por Trabajadora (Hoy)");
+                    lblProduccion.putClientProperty(FlatClientProperties.STYLE, "font:bold +2");
+                    produccionPanel.add(lblProduccion, "span, wrap");
+
+                    for (Map.Entry<String, Double> entry : data.produccion().entrySet()) {
+                        produccionPanel.add(new JLabel(entry.getKey()));
+                        JLabel lblProd = new JLabel(String.format("$ %.2f", entry.getValue()));
+                        lblProd.putClientProperty(FlatClientProperties.STYLE, "font:bold; foreground:$Success.color");
+                        produccionPanel.add(lblProd, "wrap");
+                    }
+                    if (data.produccion().isEmpty()) {
+                        produccionPanel.add(new JLabel("Sin producción registrada hoy."), "span");
+                    }
+
+                    topServiciosPanel.revalidate();
+                    topServiciosPanel.repaint();
+                    produccionPanel.revalidate();
+                    produccionPanel.repaint();
+
+                } catch (Exception ex) {
+                    logger.error("Error al renderizar datos del dashboard", ex);
+                }
+            }
+        };
+
+        worker.execute();
     }
 }

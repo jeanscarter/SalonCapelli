@@ -13,6 +13,7 @@ import app.system.ModalManager;
 import app.util.ToastNotification;
 import app.view.modals.ClienteModal;
 import app.view.modals.ProductoSelectorModal;
+import app.view.modals.TicketScannerModal;
 import com.formdev.flatlaf.FlatClientProperties;
 import com.formdev.flatlaf.extras.FlatSVGIcon;
 import net.miginfocom.swing.MigLayout;
@@ -139,15 +140,20 @@ public class VentaView extends JPanel {
         // =============================================
         // FASE 2: Header con Correlativo y Tasa BCV
         // =============================================
-        JPanel pnlHeader = new JPanel(new MigLayout("insets 10 15 10 15, fillx", "[]push[]", "[]"));
+        JPanel pnlHeader = new JPanel(new MigLayout("insets 10 15 10 15, fillx", "[]push[][10]push[]", "[]"));
         pnlHeader.putClientProperty(FlatClientProperties.STYLE, "arc:12; background:$Panel.background");
 
         lblNumeroFactura = new JLabel("Factura #------");
         lblNumeroFactura.putClientProperty(FlatClientProperties.STYLE, "font:bold +8; foreground:$Component.accentColor");
         pnlHeader.add(lblNumeroFactura);
 
+        JButton btnEscanearTicket = new JButton("📸 Escanear Ticket");
+        btnEscanearTicket.putClientProperty(FlatClientProperties.STYLE, "background:$Component.accentColor; foreground:#fff; font:bold; arc:8");
+        btnEscanearTicket.addActionListener(e -> abrirModalEscaneoTicket());
+        pnlHeader.add(btnEscanearTicket);
+
         /* CORRECCIÓN #9: Usar tasa capturada */
-        lblTasaBcvActual = new JLabel("Tasa Ref: " + String.format("%.2f", tasaBcvCapturada));
+        lblTasaBcvActual = new JLabel("Tasa Euro: " + String.format("%.2f", tasaBcvCapturada) + " Bs");
         lblTasaBcvActual.putClientProperty(FlatClientProperties.STYLE, "font:bold +2");
         pnlHeader.add(lblTasaBcvActual);
 
@@ -839,7 +845,7 @@ public class VentaView extends JPanel {
         try {
             String correlativo = ventaService.obtenerCorrelativoActual();
             lblNumeroFactura.setText("Factura #" + correlativo);
-            lblTasaBcvActual.setText("Tasa BCV: " + String.format("%.2f", BCVService.getCachedRate()));
+            lblTasaBcvActual.setText("Tasa Euro: " + String.format("%.2f", BCVService.getCachedRate()) + " Bs");
         } catch (DatabaseException e) {
             logger.warn("No se pudo cargar el correlativo: {}", e.getMessage());
             lblNumeroFactura.setText("Factura #------");
@@ -1223,5 +1229,224 @@ public class VentaView extends JPanel {
             lblSaldoRestante.setText(String.format("Saldo restante: $%.2f", restante));
             lblSaldoRestante.putClientProperty(FlatClientProperties.STYLE, "font:bold +1; foreground:$Warning.color");
         }
+    }
+
+    // =============================================
+    // Integración de Escaneo de Tickets con IA (Gemini)
+    // =============================================
+
+    private void abrirModalEscaneoTicket() {
+        ModalOption opt = ModalOption.getDefault().setCloseOnClickOutside(false).setAnimationEnabled(true);
+        TicketScannerModal modal = new TicketScannerModal(this::aplicarTicketEscaneado);
+        ModalManager.showModal(this, modal, opt, "scanner_ticket");
+    }
+
+    private void aplicarTicketEscaneado(ScannedTicketDTO dto) {
+        if (dto == null) return;
+        logger.info("Aplicando ticket escaneado a VentaView...");
+
+        // 1. Activar Modo Histórico si viene fecha o número de factura
+        boolean tieneFecha = dto.getFecha() != null && !dto.getFecha().isBlank();
+        boolean tieneFactura = dto.getNumeroFactura() != null && !dto.getNumeroFactura().isBlank();
+
+        if (tieneFecha || tieneFactura) {
+            modoHistorico = true;
+            panelHistorico.setVisible(true);
+
+            if (tieneFactura) {
+                txtCorrelativoHistorico.setText(dto.getNumeroFactura());
+                lblNumeroFactura.setText("Factura #" + dto.getNumeroFactura());
+            }
+
+            if (tieneFecha) {
+                try {
+                    String f = dto.getFecha().trim().replace("-", "/");
+                    String[] parts = f.split("/");
+                    if (parts.length == 3) {
+                        int d, m, y;
+                        if (parts[0].length() == 4) { // yyyy/MM/dd
+                            y = Integer.parseInt(parts[0]);
+                            m = Integer.parseInt(parts[1]);
+                            d = Integer.parseInt(parts[2]);
+                        } else { // dd/MM/yyyy o dd/MM/yy
+                            d = Integer.parseInt(parts[0]);
+                            m = Integer.parseInt(parts[1]);
+                            y = Integer.parseInt(parts[2]);
+                            if (y < 100) y += 2000;
+                        }
+                        Calendar cal = Calendar.getInstance();
+                        cal.set(y, m - 1, d, 12, 0, 0);
+                        spinnerFechaHistorica.setValue(cal.getTime());
+                    }
+                } catch (Exception ex) {
+                    logger.warn("No se pudo parsear fecha histórica del ticket: {}", dto.getFecha());
+                }
+            }
+
+            if (dto.getTasa() > 0) {
+                tasaBcvCapturada = dto.getTasa();
+                txtTasaHistorica.setText(String.format("%.2f", dto.getTasa()));
+                lblTasaBcvActual.setText("Tasa: " + String.format("%.2f", dto.getTasa()));
+            }
+            revalidate();
+            repaint();
+        }
+
+        // 2. Cliente
+        if (dto.getClienteCedula() != null && !dto.getClienteCedula().isBlank()) {
+            try {
+                String ced = dto.getClienteCedula().trim();
+                Cliente cli = clienteRepo.findByCedula(ced);
+                if (cli == null && !ced.contains("-")) {
+                    for (String pref : PREFIJOS_DOCUMENTO) {
+                        cli = clienteRepo.findByCedula(pref + "-" + ced);
+                        if (cli != null) break;
+                    }
+                }
+                if (cli != null) {
+                    seleccionarCliente(cli);
+                } else {
+                    String num = ced.replaceAll("[^0-9]", "");
+                    txtNumeroDocumento.setText(num);
+                    if (ced.toUpperCase().startsWith("J")) cbTipoDocumento.setSelectedItem("J");
+                    else if (ced.toUpperCase().startsWith("E")) cbTipoDocumento.setSelectedItem("E");
+                    else if (ced.toUpperCase().startsWith("G")) cbTipoDocumento.setSelectedItem("G");
+                    else cbTipoDocumento.setSelectedItem("V");
+                    if (dto.getClienteNombre() != null) {
+                        txtNombreClienteSeleccionado.setText(dto.getClienteNombre() + " (Por Registrar)");
+                    }
+                }
+            } catch (Exception ex) {
+                logger.warn("Error al asociar cliente del ticket", ex);
+            }
+        } else if (dto.getClienteNombre() != null && !dto.getClienteNombre().isBlank()) {
+            try {
+                java.util.List<Cliente> clientes = clienteRepo.searchByNombre(dto.getClienteNombre().trim());
+                if (!clientes.isEmpty()) {
+                    seleccionarCliente(clientes.get(0));
+                } else {
+                    txtNombreClienteSeleccionado.setText(dto.getClienteNombre() + " (Por Registrar)");
+                }
+            } catch (Exception ex) {
+                logger.warn("Error al buscar cliente por nombre", ex);
+            }
+        }
+
+        // 3. Trabajadora General
+        Trabajadora trabMatch = null;
+        if (dto.getTrabajadoraNombre() != null && !dto.getTrabajadoraNombre().isBlank()) {
+            String nameLower = dto.getTrabajadoraNombre().toLowerCase().trim();
+            for (int i = 0; i < cbTrabajadora.getItemCount(); i++) {
+                Trabajadora t = cbTrabajadora.getItemAt(i);
+                if (t != null) {
+                    String full = (t.getNombres() + " " + t.getApellidos()).toLowerCase();
+                    if (full.contains(nameLower) || nameLower.contains(t.getNombres().toLowerCase())) {
+                        cbTrabajadora.setSelectedItem(t);
+                        trabMatch = t;
+                        break;
+                    }
+                }
+            }
+        }
+        if (trabMatch == null && cbTrabajadora.getItemCount() > 0) {
+            trabMatch = (Trabajadora) cbTrabajadora.getSelectedItem();
+        }
+
+        // 4. Servicios / Ítems y Propinas
+        if (dto.getItems() != null && !dto.getItems().isEmpty()) {
+            for (ScannedTicketDTO.ScannedItemDTO itemDTO : dto.getItems()) {
+                // Determinar la trabajadora específica del ítem (si existe) o usar la general
+                Trabajadora itemTrab = trabMatch;
+                if (itemDTO.getTrabajadoraNombre() != null && !itemDTO.getTrabajadoraNombre().isBlank()) {
+                    String itemTrabLower = itemDTO.getTrabajadoraNombre().toLowerCase().trim();
+                    for (int i = 0; i < cbTrabajadora.getItemCount(); i++) {
+                        Trabajadora t = cbTrabajadora.getItemAt(i);
+                        if (t != null) {
+                            String full = (t.getNombres() + " " + t.getApellidos()).toLowerCase();
+                            if (full.contains(itemTrabLower) || itemTrabLower.contains(t.getNombres().toLowerCase())) {
+                                itemTrab = t;
+                                break;
+                            }
+                        }
+                    }
+                }
+                if (itemTrab == null && cbTrabajadora.getItemCount() > 0) {
+                    itemTrab = cbTrabajadora.getItemAt(0);
+                }
+
+                // Si es propina, agregar a la tabla de propinas
+                if (itemDTO.isEsPropina()) {
+                    if (itemDTO.getPrecio() > 0 && itemTrab != null) {
+                        tblPropinaModel.addRow(new Object[]{itemTrab.getNombreCompleto(), itemDTO.getPrecio()});
+                        actualizarTotalPropinas();
+                    }
+                    continue;
+                }
+
+                // Si es servicio o producto
+                Servicio matchedServicio = buscarServicioMasCercano(itemDTO.getDescripcion());
+                double precio = itemDTO.getPrecio();
+
+                if (matchedServicio != null && itemTrab != null) {
+                    TipoCabello tc = parseTipoCabello(itemDTO.getTipoCabello());
+                    if (precio <= 0) {
+                        precio = matchedServicio.getPrecio(tc);
+                    }
+                    addVentaItem(itemTrab, matchedServicio, precio, false, null);
+                } else if (cbServicio.getItemCount() > 0 && itemTrab != null) {
+                    Servicio fallback = cbServicio.getItemAt(0);
+                    if (fallback != null) {
+                        addVentaItem(itemTrab, fallback, precio > 0 ? precio : 10.0, false, null);
+                    }
+                }
+            }
+        }
+
+        // 5. Método de Pago sugerido y Referencia
+        if (dto.getMetodoPago() != null && !dto.getMetodoPago().isBlank()) {
+            String mp = dto.getMetodoPago().toUpperCase();
+            if (mp.contains("MOVIL") || mp.contains("PAGO_MOVIL")) {
+                cbMetodoPago.setSelectedItem("Pago Móvil");
+            } else if (mp.contains("EFECTIVO") || mp.contains("CASH")) {
+                cbMetodoPago.setSelectedItem("Efectivo");
+            } else if (mp.contains("PUNTO") || mp.contains("TARJETA") || mp.contains("DEBITO")) {
+                cbMetodoPago.setSelectedItem("Punto de Venta");
+            } else if (mp.contains("TRANSFERENCIA")) {
+                cbMetodoPago.setSelectedItem("Transferencia");
+            } else if (mp.contains("ZELLE")) {
+                cbMetodoPago.setSelectedItem("Zelle");
+            }
+        }
+
+        if (dto.getReferenciaPago() != null && !dto.getReferenciaPago().isBlank()) {
+            txtReferenciaPago.setText(dto.getReferenciaPago());
+        }
+
+        updateTotals();
+        ToastNotification.showSuccess(this, "Ticket Importado", "Los datos del ticket han sido cargados exitosamente en la venta.");
+    }
+
+    private Servicio buscarServicioMasCercano(String nombre) {
+        if (nombre == null || nombre.isBlank()) return null;
+        String query = nombre.toLowerCase().trim();
+        for (int i = 0; i < cbServicio.getItemCount(); i++) {
+            Servicio s = cbServicio.getItemAt(i);
+            if (s != null) {
+                String sName = s.getNombre().toLowerCase();
+                if (sName.equals(query) || sName.contains(query) || query.contains(sName)) {
+                    return s;
+                }
+            }
+        }
+        return null;
+    }
+
+    private TipoCabello parseTipoCabello(String str) {
+        if (str == null || str.isBlank()) return TipoCabello.CORTO;
+        String upper = str.toUpperCase().trim();
+        if (upper.contains("MED")) return TipoCabello.MEDIANO;
+        if (upper.contains("LARG")) return TipoCabello.LARGO;
+        if (upper.contains("EXT")) return TipoCabello.CON_EXTENSIONES;
+        return TipoCabello.CORTO;
     }
 }

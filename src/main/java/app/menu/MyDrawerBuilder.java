@@ -1,16 +1,12 @@
 package app.menu;
 
+import app.model.Usuario;
+import app.service.AuthService;
 import app.system.FormManager;
-import java.awt.Component;
-import java.awt.Image;
-import java.net.URL;
-import java.util.HashMap;
-import java.util.Map;
-import java.util.function.Supplier;
-import javax.swing.*;
-
+import app.view.*;
 import raven.modal.drawer.item.Item;
 import raven.modal.drawer.item.MenuItem;
+import raven.modal.drawer.menu.AbstractMenuElement;
 import raven.modal.drawer.menu.MenuAction;
 import raven.modal.drawer.menu.MenuEvent;
 import raven.modal.drawer.menu.MenuOption;
@@ -18,13 +14,22 @@ import raven.modal.drawer.simple.SimpleDrawerBuilder;
 import raven.modal.drawer.simple.footer.SimpleFooterData;
 import raven.modal.drawer.simple.header.SimpleHeaderData;
 
+import javax.swing.*;
+import java.awt.*;
+import java.net.URL;
+import java.util.HashMap;
+import java.util.Map;
+import java.util.function.Supplier;
+
 public class MyDrawerBuilder extends SimpleDrawerBuilder {
 
-    /* CORRECCIÓN #5: Footer persistente, lazy initialization para evitar NullPointerException en super() */
+    private final FormManager formManager;
+    private CustomDrawerFooter customFooter;
     private SimpleFooterData footerData;
 
     public MyDrawerBuilder(FormManager formManager) {
         super(createMenuOption(formManager));
+        this.formManager = formManager;
     }
 
     @Override
@@ -47,6 +52,14 @@ public class MyDrawerBuilder extends SimpleDrawerBuilder {
     }
 
     @Override
+    public AbstractMenuElement createFooter() {
+        if (customFooter == null) {
+            customFooter = new CustomDrawerFooter(formManager);
+        }
+        return customFooter;
+    }
+
+    @Override
     public SimpleFooterData getSimpleFooterData() {
         if (footerData == null) {
             footerData = new SimpleFooterData()
@@ -56,20 +69,27 @@ public class MyDrawerBuilder extends SimpleDrawerBuilder {
         return footerData;
     }
 
+    public void updateUser(String username, String role) {
+        if (customFooter != null) {
+            customFooter.updateUser(username, role);
+        }
+    }
+
     private static MenuOption createMenuOption(FormManager formManager) {
 
         Map<String, Supplier<Component>> navigationMap = new HashMap<>();
-        navigationMap.put("Dashboard", () -> new app.view.HomeView());
-        navigationMap.put("Ventas por Día", () -> new app.view.ReporteDiarioView());
-        navigationMap.put("Reporte Semanal", () -> new app.view.ReporteSemanalView());
-        navigationMap.put("Clientes", () -> new app.view.ClientesView());
-        navigationMap.put("Trabajadoras", () -> new app.view.TrabajadorasView());
-        navigationMap.put("Servicios", () -> new app.view.ServiciosView());
-        navigationMap.put("Comisiones", () -> new app.view.ComisionesView());
+        navigationMap.put("Dashboard", HomeView::new);
+        navigationMap.put("Ventas por Día", ReporteDiarioView::new);
+        navigationMap.put("Reporte Semanal", ReporteSemanalView::new);
+        navigationMap.put("Clientes", ClientesView::new);
+        navigationMap.put("Trabajadoras", TrabajadorasView::new);
+        navigationMap.put("Servicios", ServiciosView::new);
+        navigationMap.put("Comisiones", ComisionesView::new);
         navigationMap.put("Calcular Nómina", () -> new JLabel("VISTA: Cálculo de Nómina"));
-        navigationMap.put("Facturación", () -> new app.view.VentaView());
-        navigationMap.put("Cuentas por Cobrar", () -> new app.view.CuentasPorCobrarView());
-        navigationMap.put("Usuarios", () -> new app.view.UsuariosView());
+        navigationMap.put("Facturación", VentaView::new);
+        navigationMap.put("Cuentas por Cobrar", CuentasPorCobrarView::new);
+        navigationMap.put("Usuarios", UsuariosView::new);
+        navigationMap.put("Configuración del Sistema", ConfiguracionServiciosView::new);
 
         MenuItem[] items = new MenuItem[] {
                 new Item("Dashboard"),
@@ -90,7 +110,8 @@ public class MyDrawerBuilder extends SimpleDrawerBuilder {
                 new Item("Cuentas por Cobrar"),
 
                 new Item.Label("ADMINISTRACIÓN"),
-                new Item("Usuarios")
+                new Item("Usuarios"),
+                new Item("Configuración del Sistema")
         };
 
         MenuOption option = new MenuOption();
@@ -100,6 +121,14 @@ public class MyDrawerBuilder extends SimpleDrawerBuilder {
             @Override
             public void selected(MenuAction action, int[] index) {
                 String itemTitle = action.getItem().getName();
+
+                if ("Configuración del Sistema".equals(itemTitle)) {
+                    Usuario u = AuthService.getCurrentUser();
+                    if (u == null || !"jeanscarter".equalsIgnoreCase(u.getUsername())) {
+                        formManager.showToast("Acceso restringido únicamente al usuario jeanscarter");
+                        return;
+                    }
+                }
 
                 Supplier<Component> viewFactory = navigationMap.get(itemTitle);
 

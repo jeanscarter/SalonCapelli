@@ -5,6 +5,7 @@ import app.system.FormManager;
 import app.util.ToastNotification;
 import com.formdev.flatlaf.FlatClientProperties;
 import net.miginfocom.swing.MigLayout;
+import raven.modal.Drawer;
 
 import javax.swing.*;
 
@@ -44,8 +45,7 @@ public class LoginView extends JPanel {
 
         txtPassword = new JPasswordField();
         txtPassword.putClientProperty(FlatClientProperties.PLACEHOLDER_TEXT, "Contraseña");
-        txtPassword.putClientProperty(FlatClientProperties.STYLE, "arc:10; margin:5,10,5,10");
-        txtPassword.putClientProperty(FlatClientProperties.STYLE, "showRevealButton:true");
+        txtPassword.putClientProperty(FlatClientProperties.STYLE, "arc:10; margin:5,10,5,10; showRevealButton:true");
         panel.add(new JLabel("Contraseña"), "gapy 10");
         panel.add(txtPassword);
 
@@ -71,14 +71,24 @@ public class LoginView extends JPanel {
         }
 
         if (AuthService.authenticate(user, pass)) {
-            ToastNotification.showSuccess(this, "Bienvenido", "Inicio de sesión exitoso.");
-            // Ir al dashboard
-            formManager.showForm(new HomeView());
+            ToastNotification.showSuccess(formManager.getMainFrame(), "Bienvenido", "Inicio de sesión exitoso.");
+            
+            // Mostrar menú lateral y barra de herramientas
+            Drawer.setVisible(true);
             formManager.getMainFrame().showToolbar();
-            // Inicializar el Drawer con el rol adecuado (o al menos notificar)
-            formManager.getMainFrame().updateDrawerFooter(AuthService.getCurrentUser().getUsername(), AuthService.getCurrentUser().getRol());
+            
+            // Inicializar el Drawer y Toolbar con el usuario y rol activo
+            formManager.getMainFrame().updateDrawerFooter(
+                    AuthService.getCurrentUser().getUsername(), 
+                    AuthService.getCurrentUser().getRol()
+            );
+
+            // Ir al dashboard principal
+            formManager.showForm(new HomeView());
         } else {
             ToastNotification.showError(this, "Acceso Denegado", "Usuario o contraseña incorrectos.");
+            txtPassword.setText("");
+            txtPassword.requestFocus();
         }
     }
 }

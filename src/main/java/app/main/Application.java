@@ -73,6 +73,8 @@ public class Application {
             customPalette.put("@foreground", "#2D3436");
             customPalette.put("Component.accentColor", "#FF7F6F");
             customPalette.put("Success.color", "#00D29E");
+            customPalette.put("Warning.color", "#FFAA00");
+            customPalette.put("Info.color", "#2196F3");
             customPalette.put("Error.color", "#FF4C4C");
             
             // Modo Oscuro (Dark)
@@ -83,6 +85,8 @@ public class Application {
             customPalette.put("[dark]@foreground", "#E0E0E0");
             customPalette.put("[dark]Component.accentColor", "#FF8B7D");
             customPalette.put("[dark]Success.color", "#00D29E");
+            customPalette.put("[dark]Warning.color", "#FFC107");
+            customPalette.put("[dark]Info.color", "#40C4FF");
             customPalette.put("[dark]Error.color", "#FF4C4C");
 
             FlatLaf.setGlobalExtraDefaults(customPalette);

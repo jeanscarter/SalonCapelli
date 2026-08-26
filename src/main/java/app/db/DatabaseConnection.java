@@ -74,14 +74,14 @@ public class DatabaseConnection {
             Connection conn = DriverManager.getConnection(URL);
             conn.setAutoCommit(true);
 
-            // Configuraciones de SQLite aplicadas en cada conexión nueva
+            // Configuraciones de alto rendimiento por conexión
             try (Statement stmt = conn.createStatement()) {
-                stmt.execute("PRAGMA journal_mode=WAL");
                 stmt.execute("PRAGMA foreign_keys=ON");
-                stmt.execute("PRAGMA synchronous=NORMAL");
+                stmt.execute("PRAGMA busy_timeout=5000");       // Espera hasta 5s para evitar bloqueos
+                stmt.execute("PRAGMA cache_size=-64000");       // 64 MB de caché en RAM
             }
 
-            logger.info("Conexión a la base de datos establecida exitosamente");
+            logger.debug("Conexión a la base de datos establecida exitosamente");
             return conn;
 
         } catch (SQLException e) {
@@ -409,162 +409,246 @@ public class DatabaseConnection {
                     setting_value TEXT NOT NULL
                 )""";
 
+        String sqlAiKeys1 = """
+                CREATE TABLE IF NOT EXISTS ai_api_keys (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    label TEXT,
+                    api_key TEXT NOT NULL UNIQUE,
+                    is_active INTEGER DEFAULT 1,
+                    requests_today INTEGER DEFAULT 0,
+                    total_requests INTEGER DEFAULT 0,
+                    last_reset_date TEXT,
+                    last_status TEXT DEFAULT 'PENDIENTE',
+                    last_error TEXT,
+                    last_used_at TEXT,
+                    created_at TEXT DEFAULT CURRENT_TIMESTAMP
+                )""";
+
+        String sqlAiUsageLogs1 = """
+                CREATE TABLE IF NOT EXISTS ai_usage_logs (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    key_id INTEGER,
+                    key_label TEXT,
+                    model_used TEXT,
+                    duration_ms INTEGER,
+                    status TEXT,
+                    error_message TEXT,
+                    timestamp TEXT DEFAULT CURRENT_TIMESTAMP,
+                    FOREIGN KEY(key_id) REFERENCES ai_api_keys(id) ON DELETE SET NULL
+                )""";
+        String sqlAiUsageLogs2 = "CREATE INDEX IF NOT EXISTS idx_ai_usage_timestamp ON ai_usage_logs(timestamp)";
+
+        // =====================================================================
+        // MÓDULO: APRENDIZAJE LOCAL (Correcciones de Tickets)
+        // =====================================================================
+
+        String sqlTicketCorrections1 = """
+                CREATE TABLE IF NOT EXISTS ticket_corrections (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    field_type TEXT NOT NULL,
+                    raw_value TEXT NOT NULL,
+                    corrected_value TEXT NOT NULL,
+                    row_number INTEGER DEFAULT 0,
+                    frequency INTEGER DEFAULT 1,
+                    glyph_data BLOB,
+                    created_at TEXT DEFAULT CURRENT_TIMESTAMP
+                )""";
+        String sqlTicketCorrections2 = "CREATE INDEX IF NOT EXISTS idx_tc_field_raw ON ticket_corrections(field_type, raw_value)";
+        String sqlTicketCorrections3 = "CREATE INDEX IF NOT EXISTS idx_tc_frequency ON ticket_corrections(frequency DESC)";
+
         // =====================================================================
         // EJECUCIÓN
         // =====================================================================
 
-        try (Connection conn = connect();
-                Statement stmt = conn.createStatement()) {
-
-            logger.debug("Ejecutando script de creación de tablas");
-
-            // Clientes
-            stmt.execute(sqlClientes1);
-            stmt.execute(sqlClientes2);
-            stmt.execute(sqlClientes3);
-
-            try {
-                stmt.execute("ALTER TABLE clientes ADD COLUMN intercambio_activo INTEGER DEFAULT 0");
-            } catch (SQLException e) {
-            }
-            try {
-                stmt.execute("ALTER TABLE clientes ADD COLUMN fecha_vencimiento_intercambio TEXT");
-            } catch (SQLException e) {
+        try (Connection conn = connect()) {
+            // Optimización del motor SQLite a nivel de BD (fuera de transacción)
+            try (Statement stmtPragma = conn.createStatement()) {
+                stmtPragma.execute("PRAGMA journal_mode=WAL");
+                stmtPragma.execute("PRAGMA synchronous=NORMAL");
+                stmtPragma.execute("PRAGMA temp_store=MEMORY");
             }
 
-            // Trabajadoras
-            stmt.execute(sqlTrabajadoras1);
+            conn.setAutoCommit(false);
 
-            // Migraciones para DB legacy (CapelliSalesWindow -> SalonCapelli)
-            try {
-                stmt.execute("ALTER TABLE trabajadoras RENAME COLUMN numero_ci TO cedula");
-                logger.info("Migración: Columna 'numero_ci' renombrada a 'cedula' en trabajadoras");
-            } catch (SQLException e) {
-                // Ignorar si la columna no existe o ya se renombró
+            try (Statement stmt = conn.createStatement()) {
+                logger.debug("Ejecutando script de creación de tablas");
+
+                // Clientes
+                stmt.execute(sqlClientes1);
+                stmt.execute(sqlClientes2);
+                stmt.execute(sqlClientes3);
+
+                try {
+                    stmt.execute("ALTER TABLE clientes ADD COLUMN intercambio_activo INTEGER DEFAULT 0");
+                } catch (SQLException e) {
+                }
+                try {
+                    stmt.execute("ALTER TABLE clientes ADD COLUMN fecha_vencimiento_intercambio TEXT");
+                } catch (SQLException e) {
+                }
+
+                // Trabajadoras
+                stmt.execute(sqlTrabajadoras1);
+
+                // Migraciones para DB legacy (CapelliSalesWindow -> SalonCapelli)
+                try {
+                    stmt.execute("ALTER TABLE trabajadoras RENAME COLUMN numero_ci TO cedula");
+                    logger.info("Migración: Columna 'numero_ci' renombrada a 'cedula' en trabajadoras");
+                } catch (SQLException e) {
+                    // Ignorar si la columna no existe o ya se renombró
+                }
+                try {
+                    stmt.execute("ALTER TABLE trabajadoras ADD COLUMN bono_activo INTEGER DEFAULT 0");
+                } catch (SQLException e) {
+                }
+                try {
+                    stmt.execute("ALTER TABLE trabajadoras ADD COLUMN monto_bono REAL DEFAULT 0.0");
+                } catch (SQLException e) {
+                }
+                try {
+                    stmt.execute("ALTER TABLE trabajadoras ADD COLUMN razon_bono TEXT DEFAULT ''");
+                } catch (SQLException e) {
+                }
+                try {
+                    stmt.execute("ALTER TABLE trabajadoras ADD COLUMN metodo_pago_preferido TEXT DEFAULT 'BANCO'");
+                } catch (SQLException e) {
+                }
+                try {
+                    stmt.execute("ALTER TABLE trabajadoras ADD COLUMN fecha_creacion TEXT DEFAULT CURRENT_TIMESTAMP");
+                } catch (SQLException e) {
+                }
+
+                stmt.execute(sqlTrabajadoras2);
+                stmt.execute(sqlTrabajadoras3);
+
+                // Cuentas Bancarias
+                stmt.execute(sqlCuentas1);
+                stmt.execute(sqlCuentas2);
+
+                // Servicios
+                stmt.execute(sqlServicios1);
+                stmt.execute(sqlServicios2);
+                stmt.execute(sqlServicios3);
+
+                // Comisiones (Simple)
+                stmt.execute(sqlComisiones1);
+                stmt.execute(sqlComisiones2);
+
+                // Comisiones Detalladas
+                stmt.execute(sqlComisionesDetalladas1);
+                stmt.execute(sqlComisionesDetalladas2);
+                stmt.execute(sqlComisionesDetalladas3);
+                stmt.execute(sqlComisionesDetalladas4);
+                stmt.execute(sqlComisionesDetalladas5);
+
+                // Inventario: Marcas
+                stmt.execute(sqlMarcas1);
+                stmt.execute(sqlMarcas2);
+
+                // Inventario: Productos
+                stmt.execute(sqlProductos1);
+                stmt.execute(sqlProductos2);
+                stmt.execute(sqlProductos3);
+                stmt.execute(sqlProductos4);
+
+                // Ventas (antes de movimientos, por la FK)
+                stmt.execute(sqlVentas1);
+                stmt.execute(sqlVentas2);
+                stmt.execute(sqlVentas3);
+                stmt.execute(sqlVentas4);
+
+                try {
+                    stmt.execute("ALTER TABLE ventas ADD COLUMN estatus TEXT DEFAULT 'PAGADA'");
+                } catch (SQLException e) {
+                }
+
+                // Venta Items
+                stmt.execute(sqlVentaItems1);
+                stmt.execute(sqlVentaItems2);
+                stmt.execute(sqlVentaItems3);
+
+                // Venta Pagos
+                stmt.execute(sqlVentaPagos1);
+                stmt.execute(sqlVentaPagos2);
+
+                // Propinas
+                stmt.execute(sqlPropinas1);
+                stmt.execute(sqlPropinas2);
+                stmt.execute(sqlPropinas3);
+
+                // Cuentas por Cobrar
+                stmt.execute(sqlCuentasPorCobrar1);
+                stmt.execute(sqlCuentasPorCobrar2);
+
+                // Inventario: Movimientos (después de ventas por FK)
+                stmt.execute(sqlMovimientos1);
+                stmt.execute(sqlMovimientos2);
+                stmt.execute(sqlMovimientos3);
+
+                // App Settings
+                stmt.execute(sqlSettings1);
+
+                // AI Keys & Usage Logs
+                stmt.execute(sqlAiKeys1);
+                stmt.execute(sqlAiUsageLogs1);
+                stmt.execute(sqlAiUsageLogs2);
+
+                // Ticket Corrections (Aprendizaje Local)
+                stmt.execute(sqlTicketCorrections1);
+                stmt.execute(sqlTicketCorrections2);
+                stmt.execute(sqlTicketCorrections3);
+
+                // Migración automática de API Key existente en app_settings a ai_api_keys
+                try {
+                    stmt.execute("""
+                        INSERT OR IGNORE INTO ai_api_keys (label, api_key, is_active, last_status)
+                        SELECT 'Cuenta Principal', setting_value, 1, 'OK'
+                        FROM app_settings
+                        WHERE setting_key = 'gemini_api_key' AND setting_value IS NOT NULL AND TRIM(setting_value) != ''
+                    """);
+                } catch (SQLException e) {
+                    logger.debug("Migración de API Key ya realizada o no requerida: {}", e.getMessage());
+                }
+
+                // Cuentas Receptoras
+                stmt.execute(sqlCuentasReceptoras1);
+                stmt.execute(sqlCuentasReceptoras2);
+
+                // Usuarios
+                stmt.execute(sqlUsuarios1);
+                stmt.execute(sqlUsuarios2);
+
+                // Insertar admin por defecto si no existe (pass: admin123)
+                stmt.execute("INSERT OR IGNORE INTO usuarios (username, password_hash, rol) VALUES ('admin', '240be518fabd2724ddb6f04eeb1da5967448d7e831c08c8fa822809f74c720a9', 'ADMIN')");
+
+                // Inicializar configuración por defecto
+                stmt.execute("INSERT OR IGNORE INTO app_settings (setting_key, setting_value) VALUES ('correlativo', '1')");
+                stmt.execute("INSERT OR IGNORE INTO app_settings (setting_key, setting_value) VALUES ('tasa_bcv', '0.0')");
+
+                // Seed: Cuentas Receptoras del Salón
+                stmt.execute("INSERT OR IGNORE INTO cuentas_receptoras (id, nombre_cuenta, banco_plataforma, alias_referencia) VALUES (1, 'Cuenta Capelli', 'Zelle', 'Zelle Default')");
+                stmt.execute("INSERT OR IGNORE INTO cuentas_receptoras (id, nombre_cuenta, banco_plataforma, alias_referencia) VALUES (2, 'Cuenta Rosa', 'Zelle', 'Zelle Hotmail')");
+                stmt.execute("INSERT OR IGNORE INTO cuentas_receptoras (id, nombre_cuenta, banco_plataforma, alias_referencia) VALUES (3, 'Cuenta Rosa', 'Zelle', 'Zelle Ingrid')");
+                stmt.execute("INSERT OR IGNORE INTO cuentas_receptoras (id, nombre_cuenta, banco_plataforma, alias_referencia) VALUES (4, 'Cuenta Capelli', 'Punto de Venta', 'PdV Capelli')");
+                stmt.execute("INSERT OR IGNORE INTO cuentas_receptoras (id, nombre_cuenta, banco_plataforma, alias_referencia) VALUES (5, 'Cuenta Capelli', 'Pago Móvil', 'PM Capelli')");
+                stmt.execute("INSERT OR IGNORE INTO cuentas_receptoras (id, nombre_cuenta, banco_plataforma, alias_referencia) VALUES (6, 'Cuenta Rosa', 'Pago Móvil', 'PM Rosa')");
+                stmt.execute("INSERT OR IGNORE INTO cuentas_receptoras (id, nombre_cuenta, banco_plataforma, alias_referencia) VALUES (7, 'Cuenta Capelli', 'Transferencia', 'Transferencia Capelli')");
+                stmt.execute("INSERT OR IGNORE INTO cuentas_receptoras (id, nombre_cuenta, banco_plataforma, alias_referencia) VALUES (8, 'Cuenta Rosa', 'Transferencia', 'Transferencia Rosa')");
+                stmt.execute("INSERT OR IGNORE INTO cuentas_receptoras (id, nombre_cuenta, banco_plataforma, alias_referencia) VALUES (9, 'Efectivo', 'Efectivo', 'Efectivo Caja')");
+
+                conn.commit();
+                logger.info("✓ Base de datos SQLite inicializada correctamente");
+                logger.info("✓ Tablas verificadas/creadas: clientes, trabajadoras, cuentas_bancarias, " +
+                        "cuentas_receptoras, servicios, reglas_comision, reglas_comision_detalladas, marcas, productos, " +
+                        "inventario_movimientos, ventas, venta_items, venta_pagos, propinas, app_settings, usuarios");
+                logger.info("✓ Índices creados/verificados");
+
+            } catch (SQLException ex) {
+                conn.rollback();
+                throw ex;
+            } finally {
+                conn.setAutoCommit(true);
             }
-            try {
-                stmt.execute("ALTER TABLE trabajadoras ADD COLUMN bono_activo INTEGER DEFAULT 0");
-            } catch (SQLException e) {
-            }
-            try {
-                stmt.execute("ALTER TABLE trabajadoras ADD COLUMN monto_bono REAL DEFAULT 0.0");
-            } catch (SQLException e) {
-            }
-            try {
-                stmt.execute("ALTER TABLE trabajadoras ADD COLUMN razon_bono TEXT DEFAULT ''");
-            } catch (SQLException e) {
-            }
-            try {
-                stmt.execute("ALTER TABLE trabajadoras ADD COLUMN metodo_pago_preferido TEXT DEFAULT 'BANCO'");
-            } catch (SQLException e) {
-            }
-            try {
-                stmt.execute("ALTER TABLE trabajadoras ADD COLUMN fecha_creacion TEXT DEFAULT CURRENT_TIMESTAMP");
-            } catch (SQLException e) {
-            }
-
-            stmt.execute(sqlTrabajadoras2);
-            stmt.execute(sqlTrabajadoras3);
-
-            // Cuentas Bancarias
-            stmt.execute(sqlCuentas1);
-            stmt.execute(sqlCuentas2);
-
-            // Servicios
-            stmt.execute(sqlServicios1);
-            stmt.execute(sqlServicios2);
-            stmt.execute(sqlServicios3);
-
-            // Comisiones (Simple)
-            stmt.execute(sqlComisiones1);
-            stmt.execute(sqlComisiones2);
-
-            // Comisiones Detalladas
-            stmt.execute(sqlComisionesDetalladas1);
-            stmt.execute(sqlComisionesDetalladas2);
-            stmt.execute(sqlComisionesDetalladas3);
-            stmt.execute(sqlComisionesDetalladas4);
-            stmt.execute(sqlComisionesDetalladas5);
-
-            // Inventario: Marcas
-            stmt.execute(sqlMarcas1);
-            stmt.execute(sqlMarcas2);
-
-            // Inventario: Productos
-            stmt.execute(sqlProductos1);
-            stmt.execute(sqlProductos2);
-            stmt.execute(sqlProductos3);
-            stmt.execute(sqlProductos4);
-
-            // Ventas (antes de movimientos, por la FK)
-            stmt.execute(sqlVentas1);
-            stmt.execute(sqlVentas2);
-            stmt.execute(sqlVentas3);
-            stmt.execute(sqlVentas4);
-
-            try {
-                stmt.execute("ALTER TABLE ventas ADD COLUMN estatus TEXT DEFAULT 'PAGADA'");
-            } catch (SQLException e) {
-            }
-
-            // Venta Items
-            stmt.execute(sqlVentaItems1);
-            stmt.execute(sqlVentaItems2);
-            stmt.execute(sqlVentaItems3);
-
-            // Venta Pagos
-            stmt.execute(sqlVentaPagos1);
-            stmt.execute(sqlVentaPagos2);
-
-            // Propinas
-            stmt.execute(sqlPropinas1);
-            stmt.execute(sqlPropinas2);
-            stmt.execute(sqlPropinas3);
-
-            // Cuentas por Cobrar
-            stmt.execute(sqlCuentasPorCobrar1);
-            stmt.execute(sqlCuentasPorCobrar2);
-
-            // Inventario: Movimientos (después de ventas por FK)
-            stmt.execute(sqlMovimientos1);
-            stmt.execute(sqlMovimientos2);
-            stmt.execute(sqlMovimientos3);
-
-            // App Settings
-            stmt.execute(sqlSettings1);
-
-            // Cuentas Receptoras
-            stmt.execute(sqlCuentasReceptoras1);
-            stmt.execute(sqlCuentasReceptoras2);
-
-            // Usuarios
-            stmt.execute(sqlUsuarios1);
-            stmt.execute(sqlUsuarios2);
-
-            // Insertar admin por defecto si no existe (pass: admin123)
-            // Hash SHA-256 de "admin123" es "8c6976e5b5410415bde908bd4dee15dfb167a9c873fc4bb8a81f6f2ab448a918"
-            stmt.execute("INSERT OR IGNORE INTO usuarios (username, password_hash, rol) VALUES ('admin', '240be518fabd2724ddb6f04eeb1da5967448d7e831c08c8fa822809f74c720a9', 'ADMIN')");
-
-            // Inicializar configuración por defecto
-            stmt.execute("INSERT OR IGNORE INTO app_settings (setting_key, setting_value) VALUES ('correlativo', '1')");
-            stmt.execute("INSERT OR IGNORE INTO app_settings (setting_key, setting_value) VALUES ('tasa_bcv', '0.0')");
-
-            // Seed: Cuentas Receptoras del Salón
-            stmt.execute("INSERT OR IGNORE INTO cuentas_receptoras (id, nombre_cuenta, banco_plataforma, alias_referencia) VALUES (1, 'Cuenta Capelli', 'Zelle', 'Zelle Default')");
-            stmt.execute("INSERT OR IGNORE INTO cuentas_receptoras (id, nombre_cuenta, banco_plataforma, alias_referencia) VALUES (2, 'Cuenta Rosa', 'Zelle', 'Zelle Hotmail')");
-            stmt.execute("INSERT OR IGNORE INTO cuentas_receptoras (id, nombre_cuenta, banco_plataforma, alias_referencia) VALUES (3, 'Cuenta Rosa', 'Zelle', 'Zelle Ingrid')");
-            stmt.execute("INSERT OR IGNORE INTO cuentas_receptoras (id, nombre_cuenta, banco_plataforma, alias_referencia) VALUES (4, 'Cuenta Capelli', 'Punto de Venta', 'PdV Capelli')");
-            stmt.execute("INSERT OR IGNORE INTO cuentas_receptoras (id, nombre_cuenta, banco_plataforma, alias_referencia) VALUES (5, 'Cuenta Capelli', 'Pago Móvil', 'PM Capelli')");
-            stmt.execute("INSERT OR IGNORE INTO cuentas_receptoras (id, nombre_cuenta, banco_plataforma, alias_referencia) VALUES (6, 'Cuenta Rosa', 'Pago Móvil', 'PM Rosa')");
-            stmt.execute("INSERT OR IGNORE INTO cuentas_receptoras (id, nombre_cuenta, banco_plataforma, alias_referencia) VALUES (7, 'Cuenta Capelli', 'Transferencia', 'Transferencia Capelli')");
-            stmt.execute("INSERT OR IGNORE INTO cuentas_receptoras (id, nombre_cuenta, banco_plataforma, alias_referencia) VALUES (8, 'Cuenta Rosa', 'Transferencia', 'Transferencia Rosa')");
-            stmt.execute("INSERT OR IGNORE INTO cuentas_receptoras (id, nombre_cuenta, banco_plataforma, alias_referencia) VALUES (9, 'Efectivo', 'Efectivo', 'Efectivo Caja')");
-
-            logger.info("✓ Base de datos SQLite inicializada correctamente");
-            logger.info("✓ Tablas verificadas/creadas: clientes, trabajadoras, cuentas_bancarias, " +
-                    "cuentas_receptoras, servicios, reglas_comision, reglas_comision_detalladas, marcas, productos, " +
-                    "inventario_movimientos, ventas, venta_items, venta_pagos, propinas, app_settings, usuarios");
-            logger.info("✓ Índices creados/verificados");
 
         } catch (SQLException e) {
             logger.error("Error crítico al inicializar la base de datos", e);
