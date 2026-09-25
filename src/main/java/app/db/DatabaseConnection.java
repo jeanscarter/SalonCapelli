@@ -6,6 +6,7 @@ import org.slf4j.LoggerFactory;
 
 import java.sql.Connection;
 import java.sql.DriverManager;
+import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
 
@@ -636,6 +637,9 @@ public class DatabaseConnection {
                 stmt.execute("INSERT OR IGNORE INTO cuentas_receptoras (id, nombre_cuenta, banco_plataforma, alias_referencia) VALUES (8, 'Cuenta Rosa', 'Transferencia', 'Transferencia Rosa')");
                 stmt.execute("INSERT OR IGNORE INTO cuentas_receptoras (id, nombre_cuenta, banco_plataforma, alias_referencia) VALUES (9, 'Efectivo', 'Efectivo', 'Efectivo Caja')");
 
+                // Seed data automático si no hay trabajadoras registradas
+                seedInitialDataIfEmpty(conn);
+
                 conn.commit();
                 logger.info("✓ Base de datos SQLite inicializada correctamente");
                 logger.info("✓ Tablas verificadas/creadas: clientes, trabajadoras, cuentas_bancarias, " +
@@ -653,6 +657,52 @@ public class DatabaseConnection {
         } catch (SQLException e) {
             logger.error("Error crítico al inicializar la base de datos", e);
             throw DatabaseException.initializationFailed(e);
+        }
+    }
+
+    /**
+     * Si la base de datos está vacía (sin trabajadoras), ejecuta el script de seed inicial
+     * ubicado en resources db/seed_data.sql.
+     */
+    private static void seedInitialDataIfEmpty(Connection conn) {
+        try (Statement stmtCheck = conn.createStatement();
+             ResultSet rs = stmtCheck.executeQuery("SELECT COUNT(*) FROM trabajadoras")) {
+            if (rs.next() && rs.getInt(1) > 0) {
+                logger.debug("La base de datos ya contiene datos iniciales ({} trabajadoras)", rs.getInt(1));
+                return;
+            }
+        } catch (SQLException e) {
+            logger.warn("No se pudo verificar el conteo de trabajadoras: {}", e.getMessage());
+        }
+
+        logger.info("Base de datos sin registros de trabajadoras. Cargando seed data desde db/seed_data.sql...");
+        try (java.io.InputStream is = DatabaseConnection.class.getClassLoader().getResourceAsStream("db/seed_data.sql")) {
+            if (is == null) {
+                logger.warn("No se encontró db/seed_data.sql en el classpath");
+                return;
+            }
+            String sqlContent = new String(is.readAllBytes(), java.nio.charset.StandardCharsets.UTF_8);
+            StringBuilder sb = new StringBuilder();
+            try (Statement stmtExec = conn.createStatement()) {
+                for (String line : sqlContent.split("\n")) {
+                    String trimmed = line.trim();
+                    if (trimmed.startsWith("--") || trimmed.isEmpty()) {
+                        continue;
+                    }
+                    sb.append(line).append(" ");
+                    if (trimmed.endsWith(";")) {
+                        String sql = sb.toString().trim();
+                        if (sql.endsWith(";")) {
+                            sql = sql.substring(0, sql.length() - 1);
+                        }
+                        stmtExec.execute(sql);
+                        sb.setLength(0);
+                    }
+                }
+            }
+            logger.info("✓ Seed data inicial cargado exitosamente en la base de datos");
+        } catch (Exception e) {
+            logger.error("Error al cargar db/seed_data.sql: {}", e.getMessage(), e);
         }
     }
 

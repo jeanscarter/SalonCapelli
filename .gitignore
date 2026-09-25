@@ -4,6 +4,7 @@ dist/
 *.class
 *.jar
 *.war
+*.exe
 
 # NetBeans (Archivos de configuración de usuario)
 nbproject/private/

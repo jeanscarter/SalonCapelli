@@ -40,6 +40,12 @@ public class Servicio {
     public String getNombre() { return nombre; }
     public void setNombre(String nombre) { this.nombre = nombre; }
 
+    @Override
+    public String toString() {
+        return nombre != null ? nombre : "";
+    }
+
+
     public CategoriaServicio getCategoria() { return categoria; }
     public void setCategoria(CategoriaServicio categoria) { this.categoria = categoria; }
 

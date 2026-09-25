@@ -49,6 +49,13 @@ public class Trabajadora {
         return (nombres != null ? nombres : "") + " " + (apellidos != null ? apellidos : "");
     }
 
+    @Override
+    public String toString() {
+        String full = getNombreCompleto().trim();
+        return full.isEmpty() ? (cedula != null ? cedula : "") : full;
+    }
+
+
     public String getTelefono() { return telefono; }
     public void setTelefono(String telefono) { this.telefono = telefono; }
 

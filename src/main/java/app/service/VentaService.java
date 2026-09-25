@@ -132,6 +132,38 @@ public class VentaService {
     }
 
     /**
+     * Actualiza manualmente el número consecutivo de la factura en app_settings.
+     *
+     * @param nuevoValor Nuevo número consecutivo (debe ser mayor o igual a 1)
+     * @throws DatabaseException Si ocurre un error en la base de datos
+     */
+    public void actualizarCorrelativo(int nuevoValor) throws DatabaseException {
+        if (nuevoValor < 1) {
+            throw new IllegalArgumentException("El número de correlativo debe ser mayor o igual a 1.");
+        }
+
+        String sqlUpdate = "UPDATE app_settings SET setting_value = ? WHERE setting_key = 'correlativo'";
+
+        try (Connection conn = DatabaseConnection.connect()) {
+            try (PreparedStatement pstmt = conn.prepareStatement(sqlUpdate)) {
+                pstmt.setString(1, String.valueOf(nuevoValor));
+                int affected = pstmt.executeUpdate();
+                if (affected == 0) {
+                    try (PreparedStatement pstmtIns = conn.prepareStatement(
+                            "INSERT OR REPLACE INTO app_settings (setting_key, setting_value) VALUES ('correlativo', ?)")) {
+                        pstmtIns.setString(1, String.valueOf(nuevoValor));
+                        pstmtIns.executeUpdate();
+                    }
+                }
+            }
+            logger.info("✓ Correlativo de factura actualizado manualmente a: {}", nuevoValor);
+        } catch (SQLException e) {
+            logger.error("Error al actualizar correlativo manual", e);
+            throw DatabaseException.queryFailed("ACTUALIZAR_CORRELATIVO", e);
+        }
+    }
+
+    /**
      * Busca la tasa BCV utilizada en ventas de una fecha específica.
      * Delegación directa al repositorio para uso desde la UI.
      */

@@ -10,9 +10,12 @@ import app.service.TicketPDFService;
 import app.service.VentaService;
 import app.service.AuthService;
 import app.system.ModalManager;
+import app.util.FastKeySelectionManager;
 import app.util.ToastNotification;
 import app.view.modals.ClienteModal;
+import app.view.modals.ClienteSelectorModal;
 import app.view.modals.ProductoSelectorModal;
+import app.view.modals.ServicioModal;
 import app.view.modals.TicketScannerModal;
 import com.formdev.flatlaf.FlatClientProperties;
 import com.formdev.flatlaf.extras.FlatSVGIcon;
@@ -29,6 +32,7 @@ import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.util.Calendar;
 import java.util.Date;
+import java.util.List;
 
 /**
  * Vista principal de Facturación / Punto de Venta.
@@ -51,10 +55,16 @@ public class VentaView extends JPanel {
     private final VentaService ventaService;
 
     // === FASE 1: Búsqueda de Cliente ===
+    private JComboBox<String> cbModoBusquedaCliente;
     private JComboBox<String> cbTipoDocumento;
     private JTextField txtNumeroDocumento;
     private JButton btnBuscarCliente;
+    private JTextField txtNombreBusqueda;
+    private JButton btnBuscarPorNombre;
+    private JPanel pnlCardBusqueda;
+    private CardLayout cardLayoutBusqueda;
     private JTextField txtNombreClienteSeleccionado;
+    private JButton btnLimpiarCliente;
     private Cliente clienteSeleccionado;
 
     // === Formulario de Servicios ===
@@ -62,6 +72,7 @@ public class VentaView extends JPanel {
     private JComboBox<Servicio> cbServicio;
     private JComboBox<TipoCabello> cbTipoCabello;
     private JCheckBox chkClienteTraeProducto;
+    private JTextField txtPrecioServicio;
     private JButton btnAddService;
 
     // === Tabla de Pre-Visualización ===
@@ -143,9 +154,28 @@ public class VentaView extends JPanel {
         JPanel pnlHeader = new JPanel(new MigLayout("insets 10 15 10 15, fillx", "[]push[][10]push[]", "[]"));
         pnlHeader.putClientProperty(FlatClientProperties.STYLE, "arc:12; background:$Panel.background");
 
+        JPanel pnlFacturaCorrelativo = new JPanel(new MigLayout("insets 0", "[]6[]", "[center]"));
+        pnlFacturaCorrelativo.setOpaque(false);
+
         lblNumeroFactura = new JLabel("Factura #------");
         lblNumeroFactura.putClientProperty(FlatClientProperties.STYLE, "font:bold +8; foreground:$Component.accentColor");
-        pnlHeader.add(lblNumeroFactura);
+        lblNumeroFactura.setCursor(new java.awt.Cursor(java.awt.Cursor.HAND_CURSOR));
+        lblNumeroFactura.setToolTipText("Clic aquí para cambiar el número consecutivo de la factura");
+        lblNumeroFactura.addMouseListener(new java.awt.event.MouseAdapter() {
+            @Override
+            public void mouseClicked(java.awt.event.MouseEvent e) {
+                mostrarDialogoCambiarCorrelativo();
+            }
+        });
+        pnlFacturaCorrelativo.add(lblNumeroFactura);
+
+        JButton btnEditarCorrelativo = new JButton("✏️");
+        btnEditarCorrelativo.putClientProperty(FlatClientProperties.STYLE, "arc:8; margin:2 5 2 5; font:11");
+        btnEditarCorrelativo.setToolTipText("Modificar el número consecutivo de factura");
+        btnEditarCorrelativo.addActionListener(e -> mostrarDialogoCambiarCorrelativo());
+        pnlFacturaCorrelativo.add(btnEditarCorrelativo);
+
+        pnlHeader.add(pnlFacturaCorrelativo);
 
         JButton btnEscanearTicket = new JButton("📸 Escanear Ticket");
         btnEscanearTicket.putClientProperty(FlatClientProperties.STYLE, "background:$Component.accentColor; foreground:#fff; font:bold; arc:8");
@@ -179,25 +209,55 @@ public class VentaView extends JPanel {
 
         pnlForm.add(new JLabel("Trabajadora:"));
         cbTrabajadora = new JComboBox<>();
+        FastKeySelectionManager.install(cbTrabajadora);
         pnlForm.add(cbTrabajadora);
 
-        pnlForm.add(new JLabel("Servicio:"));
+        JPanel pnlServicioHeader = new JPanel(new MigLayout("insets 0, fillx", "[]push[]", "[]"));
+        pnlServicioHeader.setOpaque(false);
+        pnlServicioHeader.add(new JLabel("Servicio:"));
+        
+        JButton btnEditarPrecioCatalogo = new JButton("✏️ Modificar Precios");
+        btnEditarPrecioCatalogo.putClientProperty(FlatClientProperties.STYLE, "arc:8; margin:1 6 1 6; font:11");
+        btnEditarPrecioCatalogo.setToolTipText("Modificar precios definidos de este servicio en el catálogo");
+        btnEditarPrecioCatalogo.addActionListener(e -> abrirModalEditarServicio());
+        pnlServicioHeader.add(btnEditarPrecioCatalogo);
+        pnlForm.add(pnlServicioHeader);
+
         cbServicio = new JComboBox<>();
+        FastKeySelectionManager.install(cbServicio);
         cbServicio.addActionListener(e -> updateServiceOptions());
         pnlForm.add(cbServicio);
 
         pnlForm.add(new JLabel("Longitud / Tipo de Cabello:"));
         cbTipoCabello = new JComboBox<>(TipoCabello.values());
+        FastKeySelectionManager.install(cbTipoCabello);
+        cbTipoCabello.addActionListener(e -> updateServicePriceField());
         pnlForm.add(cbTipoCabello);
 
         chkClienteTraeProducto = new JCheckBox("El cliente trae su propio producto");
         chkClienteTraeProducto.setVisible(false);
+        chkClienteTraeProducto.addActionListener(e -> updateServicePriceField());
         pnlForm.add(chkClienteTraeProducto);
+
+        // Campo de Precio Editable
+        JPanel pnlPrecio = new JPanel(new MigLayout("insets 0, fillx", "[]10[grow, fill]", "[]"));
+        pnlPrecio.setOpaque(false);
+        JLabel lblPrecio = new JLabel("Precio ($):");
+        lblPrecio.putClientProperty(FlatClientProperties.STYLE, "font:bold");
+        pnlPrecio.add(lblPrecio);
+
+        txtPrecioServicio = new JTextField();
+        txtPrecioServicio.putClientProperty(FlatClientProperties.PLACEHOLDER_TEXT, "0.00");
+        txtPrecioServicio.putClientProperty(FlatClientProperties.STYLE, "font:bold +3; foreground:$Component.accentColor; arc:8");
+        txtPrecioServicio.setToolTipText("Precio para este servicio en la venta actual (editable)");
+        txtPrecioServicio.addActionListener(e -> tryAddService());
+        pnlPrecio.add(txtPrecioServicio);
+        pnlForm.add(pnlPrecio);
 
         btnAddService = new JButton("Agregar a la Venta", new FlatSVGIcon("icons/add.svg", 16, 16));
         btnAddService.putClientProperty(FlatClientProperties.STYLE, "background:$Component.accentColor; foreground:#fff; font:bold");
         btnAddService.addActionListener(e -> tryAddService());
-        pnlForm.add(btnAddService, "gapy 20");
+        pnlForm.add(btnAddService, "gapy 15");
 
         // =============================================
         // FASE 3: Panel de Propinas
@@ -297,25 +357,46 @@ public class VentaView extends JPanel {
      * └─────────────────────────────────────────┘
      */
     private JPanel createClienteSearchPanel() {
-        JPanel panel = new JPanel(new MigLayout("insets 0, fillx, wrap 1", "[grow, fill]", "[]5[]5[]"));
+        JPanel panel = new JPanel(new MigLayout("insets 0, fillx, wrap 1", "[grow, fill]", "[]6[]6[]"));
         panel.setOpaque(false);
 
-        JLabel lblBuscar = new JLabel("Buscar Cliente:");
-        lblBuscar.putClientProperty(FlatClientProperties.STYLE, "font:bold");
-        panel.add(lblBuscar);
+        // Cabecera: [Cliente:] [🆔 Cédula / 👤 Nombre] [📋 Directorio]
+        JPanel pnlHeaderCliente = new JPanel(new MigLayout("insets 0, fillx", "[]push[]5[]", "[]"));
+        pnlHeaderCliente.setOpaque(false);
 
-        // Fila de búsqueda: [Prefijo] [Número] [Botón]
-        JPanel rowSearch = new JPanel(new MigLayout("insets 0, fillx", "[65!]5[grow, fill]5[]", "[]"));
-        rowSearch.setOpaque(false);
+        JLabel lblBuscar = new JLabel("Cliente:");
+        lblBuscar.putClientProperty(FlatClientProperties.STYLE, "font:bold +1");
+        pnlHeaderCliente.add(lblBuscar);
+
+        cbModoBusquedaCliente = new JComboBox<>(new String[]{"🆔 Por Cédula", "👤 Por Nombre"});
+        cbModoBusquedaCliente.putClientProperty(FlatClientProperties.STYLE, "arc:8; font:11");
+        cbModoBusquedaCliente.addActionListener(e -> alternarModoBusquedaCliente());
+        pnlHeaderCliente.add(cbModoBusquedaCliente);
+
+        JButton btnDirectorio = new JButton("📋 Directorio");
+        btnDirectorio.putClientProperty(FlatClientProperties.STYLE, "arc:8; margin:1 6 1 6; font:11");
+        btnDirectorio.setToolTipText("Abrir directorio completo de clientes y buscar en vivo");
+        btnDirectorio.addActionListener(e -> abrirDirectorioClientes(null));
+        pnlHeaderCliente.add(btnDirectorio);
+
+        panel.add(pnlHeaderCliente);
+
+        // Panel con CardLayout para alternar entre Cédula y Nombre
+        cardLayoutBusqueda = new CardLayout();
+        pnlCardBusqueda = new JPanel(cardLayoutBusqueda);
+        pnlCardBusqueda.setOpaque(false);
+
+        // --- Card 1: Por Cédula ---
+        JPanel rowCedula = new JPanel(new MigLayout("insets 0, fillx", "[65!]5[grow, fill]5[]", "[]"));
+        rowCedula.setOpaque(false);
 
         cbTipoDocumento = new JComboBox<>(PREFIJOS_DOCUMENTO);
         cbTipoDocumento.putClientProperty(FlatClientProperties.STYLE, "arc:8");
-        rowSearch.add(cbTipoDocumento);
+        rowCedula.add(cbTipoDocumento);
 
         txtNumeroDocumento = new JTextField();
-        txtNumeroDocumento.putClientProperty(FlatClientProperties.PLACEHOLDER_TEXT, "N° de Documento");
+        txtNumeroDocumento.putClientProperty(FlatClientProperties.PLACEHOLDER_TEXT, "N° de Cédula");
         txtNumeroDocumento.putClientProperty(FlatClientProperties.STYLE, "arc:8");
-        // Filtro: solo dígitos
         txtNumeroDocumento.addKeyListener(new java.awt.event.KeyAdapter() {
             @Override
             public void keyTyped(java.awt.event.KeyEvent e) {
@@ -325,27 +406,128 @@ public class VentaView extends JPanel {
                 }
             }
         });
-        // Enter → buscar
         txtNumeroDocumento.addActionListener(e -> buscarCliente());
-        rowSearch.add(txtNumeroDocumento);
+        rowCedula.add(txtNumeroDocumento);
 
         btnBuscarCliente = new JButton("Buscar");
         btnBuscarCliente.setIcon(new FlatSVGIcon("icons/search.svg", 14, 14));
         btnBuscarCliente.putClientProperty(FlatClientProperties.STYLE, "arc:8; background:$Component.accentColor; foreground:#fff");
         btnBuscarCliente.addActionListener(e -> buscarCliente());
-        rowSearch.add(btnBuscarCliente);
+        rowCedula.add(btnBuscarCliente);
 
-        panel.add(rowSearch);
+        pnlCardBusqueda.add(rowCedula, "CEDULA");
 
-        // Campo de confirmación visual (read-only)
+        // --- Card 2: Por Nombre ---
+        JPanel rowNombre = new JPanel(new MigLayout("insets 0, fillx", "[grow, fill]5[]", "[]"));
+        rowNombre.setOpaque(false);
+
+        txtNombreBusqueda = new JTextField();
+        txtNombreBusqueda.putClientProperty(FlatClientProperties.PLACEHOLDER_TEXT, "Escriba nombre o apellido...");
+        txtNombreBusqueda.putClientProperty(FlatClientProperties.STYLE, "arc:8");
+        txtNombreBusqueda.addActionListener(e -> buscarClientePorNombre());
+        rowNombre.add(txtNombreBusqueda);
+
+        btnBuscarPorNombre = new JButton("Buscar");
+        btnBuscarPorNombre.setIcon(new FlatSVGIcon("icons/search.svg", 14, 14));
+        btnBuscarPorNombre.putClientProperty(FlatClientProperties.STYLE, "arc:8; background:$Component.accentColor; foreground:#fff");
+        btnBuscarPorNombre.addActionListener(e -> buscarClientePorNombre());
+        rowNombre.add(btnBuscarPorNombre);
+
+        pnlCardBusqueda.add(rowNombre, "NOMBRE");
+
+        panel.add(pnlCardBusqueda);
+
+        // Fila de confirmación visual con botón para limpiar
+        JPanel rowConfirmacion = new JPanel(new MigLayout("insets 0, fillx", "[grow, fill]5[]", "[]"));
+        rowConfirmacion.setOpaque(false);
+
         txtNombreClienteSeleccionado = new JTextField();
         txtNombreClienteSeleccionado.setEditable(false);
         txtNombreClienteSeleccionado.putClientProperty(FlatClientProperties.PLACEHOLDER_TEXT, "-- Ningún cliente seleccionado --");
         txtNombreClienteSeleccionado.putClientProperty(FlatClientProperties.STYLE, 
             "arc:8; background:lighten($Panel.background,5%); foreground:$Success.color; font:bold");
-        panel.add(txtNombreClienteSeleccionado);
+        rowConfirmacion.add(txtNombreClienteSeleccionado);
+
+        btnLimpiarCliente = new JButton("❌");
+        btnLimpiarCliente.putClientProperty(FlatClientProperties.STYLE, "arc:8; margin:2 5 2 5; font:11");
+        btnLimpiarCliente.setToolTipText("Quitar selección de cliente");
+        btnLimpiarCliente.addActionListener(e -> limpiarSeleccionCliente());
+        rowConfirmacion.add(btnLimpiarCliente);
+
+        panel.add(rowConfirmacion);
 
         return panel;
+    }
+
+    private void alternarModoBusquedaCliente() {
+        if (cbModoBusquedaCliente.getSelectedIndex() == 0) {
+            cardLayoutBusqueda.show(pnlCardBusqueda, "CEDULA");
+            txtNumeroDocumento.requestFocusInWindow();
+        } else {
+            cardLayoutBusqueda.show(pnlCardBusqueda, "NOMBRE");
+            txtNombreBusqueda.requestFocusInWindow();
+        }
+    }
+
+    private void buscarClientePorNombre() {
+        String nombre = txtNombreBusqueda.getText().trim();
+
+        if (nombre.isEmpty()) {
+            ToastNotification.showWarning(this, "Ingrese un nombre o apellido para buscar.");
+            txtNombreBusqueda.requestFocusInWindow();
+            return;
+        }
+
+        try {
+            List<Cliente> encontrados = clienteRepo.searchByNombre(nombre);
+
+            if (encontrados.size() == 1) {
+                // Exactamente 1 cliente encontrado -> seleccionarlo directamente
+                Cliente c = encontrados.get(0);
+                seleccionarCliente(c);
+                ToastNotification.showSuccess(this, "Cliente Encontrado", c.getNombreCompleto());
+            } else if (encontrados.size() > 1) {
+                // Múltiples coincidencias -> abrir selector con la consulta pre-cargada
+                ToastNotification.showInfo(this, "Múltiples Clientes", 
+                    "Se encontraron " + encontrados.size() + " clientes. Seleccione el deseado.");
+                abrirDirectorioClientes(nombre);
+            } else {
+                // Ninguna coincidencia -> ofrecer registrar
+                ToastNotification.showInfo(this, "Cliente No Encontrado",
+                    "No hay clientes con '" + nombre + "'. Abriendo formulario de registro...");
+                abrirModalRegistroClientePorNombre(nombre);
+            }
+        } catch (DatabaseException e) {
+            logger.error("Error al buscar cliente por nombre: {}", e.getMessage(), e);
+            ToastNotification.showError(this, "Error de Base de Datos",
+                "No se pudo buscar el cliente: " + e.getMessage());
+        }
+    }
+
+    private void abrirDirectorioClientes(String queryInicial) {
+        ModalOption opt = ModalOption.getDefault()
+                .setCloseOnClickOutside(false)
+                .setAnimationEnabled(true);
+
+        ClienteSelectorModal modal = new ClienteSelectorModal(queryInicial, cliente -> {
+            seleccionarCliente(cliente);
+            ToastNotification.showSuccess(this, "Cliente Seleccionado", cliente.getNombreCompleto());
+        });
+
+        ModalManager.showModal(this, modal, opt, "directorio_clientes_modal");
+    }
+
+    private void abrirModalRegistroClientePorNombre(String nombre) {
+        ModalOption opt = ModalOption.getDefault()
+                .setCloseOnClickOutside(false)
+                .setAnimationEnabled(true);
+
+        ClienteModal modal = new ClienteModal(clienteCreado -> {
+            seleccionarCliente(clienteCreado);
+            logger.info("✓ Cliente registrado y auto-seleccionado: {}", clienteCreado.getNombreCompleto());
+        });
+
+        ModalManager.showModal(this, modal, opt, "cliente_registro_rapido_nombre");
     }
 
     /**
@@ -423,6 +605,7 @@ public class VentaView extends JPanel {
         this.clienteSeleccionado = null;
         txtNombreClienteSeleccionado.setText("");
         txtNumeroDocumento.setText("");
+        if (txtNombreBusqueda != null) txtNombreBusqueda.setText("");
         cbTipoDocumento.setSelectedIndex(0);
     }
 
@@ -454,6 +637,9 @@ public class VentaView extends JPanel {
             cbTrabajadora.setRenderer(renderer);
             cbServicio.setRenderer(renderer);
             cbTipoCabello.setRenderer(renderer);
+            cbTrabajadoraPropina.setRenderer(renderer);
+
+            updateServiceOptions();
 
         } catch (DatabaseException e) {
             ToastNotification.showError(this, "Error cargando datos", e.getMessage());
@@ -461,16 +647,80 @@ public class VentaView extends JPanel {
     }
 
     // =============================================
-    // Lógica de Servicios (sin cambios funcionales)
+    // Lógica de Servicios y Precios
     // =============================================
 
     private void updateServiceOptions() {
         Servicio s = (Servicio) cbServicio.getSelectedItem();
         if (s != null) {
             chkClienteTraeProducto.setVisible(s.isPermiteClienteProducto());
-            chkClienteTraeProducto.setSelected(false);
+            if (!s.isPermiteClienteProducto()) {
+                chkClienteTraeProducto.setSelected(false);
+            }
         } else {
             chkClienteTraeProducto.setVisible(false);
+        }
+        updateServicePriceField();
+    }
+
+    private void updateServicePriceField() {
+        Servicio s = (Servicio) cbServicio.getSelectedItem();
+        TipoCabello tc = (TipoCabello) cbTipoCabello.getSelectedItem();
+        if (s == null) {
+            if (txtPrecioServicio != null) txtPrecioServicio.setText("0.00");
+            return;
+        }
+        if (tc == null) tc = TipoCabello.CORTO;
+
+        boolean clienteTrae = chkClienteTraeProducto != null && chkClienteTraeProducto.isSelected();
+        double precio = (clienteTrae && s.getPrecioClienteProducto() > 0)
+                ? s.getPrecioClienteProducto()
+                : s.getPrecio(tc);
+
+        if (txtPrecioServicio != null) {
+            txtPrecioServicio.setText(String.format(java.util.Locale.US, "%.2f", precio));
+        }
+    }
+
+    private void abrirModalEditarServicio() {
+        Servicio s = (Servicio) cbServicio.getSelectedItem();
+        if (s == null) {
+            ToastNotification.showWarning(this, "Seleccione un servicio para modificar sus precios.");
+            return;
+        }
+
+        ModalOption opt = ModalOption.getDefault()
+                .setCloseOnClickOutside(false)
+                .setAnimationEnabled(true);
+
+        ServicioModal modal = new ServicioModal(s, servicioActualizado -> {
+            recargarServicios(servicioActualizado.getId());
+            ToastNotification.showSuccess(this, "Precios Actualizados",
+                    "Se actualizaron los precios definidos de " + servicioActualizado.getNombre());
+        });
+
+        ModalManager.showModal(this, modal, opt, "editar_servicio_precios");
+    }
+
+    private void recargarServicios(int selectServicioId) {
+        try {
+            java.util.List<Servicio> servicios = servicioRepo.findAll();
+            cbServicio.removeAllItems();
+            Servicio aSeleccionar = null;
+            for (Servicio s : servicios) {
+                cbServicio.addItem(s);
+                if (s.getId() == selectServicioId) {
+                    aSeleccionar = s;
+                }
+            }
+            if (aSeleccionar != null) {
+                cbServicio.setSelectedItem(aSeleccionar);
+            } else if (!servicios.isEmpty()) {
+                cbServicio.setSelectedIndex(0);
+            }
+            updateServiceOptions();
+        } catch (DatabaseException e) {
+            logger.error("Error al recargar catálogo de servicios", e);
         }
     }
 
@@ -484,10 +734,26 @@ public class VentaView extends JPanel {
             return;
         }
 
+        double precioFinal;
+        try {
+            String precioText = txtPrecioServicio != null ? txtPrecioServicio.getText().trim().replace(",", ".") : "";
+            if (precioText.isEmpty()) {
+                ToastNotification.showWarning(this, "Debe ingresar un precio para el servicio.");
+                if (txtPrecioServicio != null) txtPrecioServicio.requestFocusInWindow();
+                return;
+            }
+            precioFinal = Double.parseDouble(precioText);
+            if (precioFinal < 0) {
+                ToastNotification.showWarning(this, "El precio no puede ser negativo.");
+                return;
+            }
+        } catch (NumberFormatException e) {
+            ToastNotification.showWarning(this, "El precio ingresado no es válido.");
+            if (txtPrecioServicio != null) txtPrecioServicio.requestFocusInWindow();
+            return;
+        }
+
         boolean clienteTrae = chkClienteTraeProducto.isSelected();
-        double precioFinal = clienteTrae && s.getPrecioClienteProducto() > 0 
-                ? s.getPrecioClienteProducto() 
-                : s.getPrecio(tc);
 
         // Si el servicio requiere inventario y el cliente NO trae el producto
         boolean requiereProducto = !clienteTrae && s.getCategoria() != null && 
@@ -535,6 +801,7 @@ public class VentaView extends JPanel {
         
         // Reset form simple
         cbServicio.setSelectedIndex(0);
+        updateServiceOptions();
     }
 
     private void updateTotals() {
@@ -852,6 +1119,68 @@ public class VentaView extends JPanel {
         }
     }
 
+    /**
+     * Muestra un diálogo interactivo para modificar el número consecutivo de la factura.
+     */
+    private void mostrarDialogoCambiarCorrelativo() {
+        try {
+            String actual = ventaService.obtenerCorrelativoActual();
+            int actualNum = Integer.parseInt(actual);
+
+            JPanel panel = new JPanel(new MigLayout("fillx, insets 10", "[grow]", "[]10[]5[]"));
+            JLabel lblInfo = new JLabel("Ingrese el nuevo número consecutivo para la próxima factura:");
+            lblInfo.putClientProperty(FlatClientProperties.STYLE, "font:bold");
+            panel.add(lblInfo, "wrap");
+
+            JTextField txtNuevoCorrelativo = new JTextField(String.valueOf(actualNum), 12);
+            txtNuevoCorrelativo.putClientProperty(FlatClientProperties.STYLE, "arc:8; font:bold +4");
+            txtNuevoCorrelativo.putClientProperty(FlatClientProperties.PLACEHOLDER_TEXT, "Ej: " + actualNum);
+            txtNuevoCorrelativo.selectAll();
+            panel.add(txtNuevoCorrelativo, "growx, wrap");
+
+            JLabel lblHelp = new JLabel("<html><i>Ejemplo: Si ingresa <b>" + actualNum + "</b>, la factura se registrará como <b>#" + String.format("%06d", actualNum) + "</b>.</i></html>");
+            lblHelp.putClientProperty(FlatClientProperties.STYLE, "foreground:$Label.disabledForeground; font:small");
+            panel.add(lblHelp, "wrap");
+
+            int option = JOptionPane.showConfirmDialog(
+                    this,
+                    panel,
+                    "Cambiar Consecutivo de Factura",
+                    JOptionPane.OK_CANCEL_OPTION,
+                    JOptionPane.PLAIN_MESSAGE
+            );
+
+            if (option == JOptionPane.OK_OPTION) {
+                String input = txtNuevoCorrelativo.getText().trim();
+                if (input.isEmpty()) {
+                    ToastNotification.showWarning(this, "Aviso", "El número consecutivo no puede estar vacío.");
+                    return;
+                }
+
+                try {
+                    int nuevoNum = Integer.parseInt(input);
+                    if (nuevoNum < 1) {
+                        ToastNotification.showError(this, "Número Inválido", "El número consecutivo debe ser mayor a 0.");
+                        return;
+                    }
+
+                    ventaService.actualizarCorrelativo(nuevoNum);
+                    cargarCorrelativoActual();
+                    ToastNotification.showSuccess(
+                            this,
+                            "Consecutivo Actualizado",
+                            "El próximo número de factura será #" + String.format("%06d", nuevoNum)
+                    );
+                } catch (NumberFormatException ex) {
+                    ToastNotification.showError(this, "Número Inválido", "Por favor ingrese únicamente dígitos numéricos.");
+                }
+            }
+        } catch (Exception ex) {
+            logger.error("Error al cambiar consecutivo", ex);
+            ToastNotification.showError(this, "Error", "No se pudo actualizar el consecutivo: " + ex.getMessage());
+        }
+    }
+
     // =============================================
     // FASE 2: Keybindings
     // =============================================
@@ -896,6 +1225,7 @@ public class VentaView extends JPanel {
         rowInput.setOpaque(false);
 
         cbTrabajadoraPropina = new JComboBox<>();
+        FastKeySelectionManager.install(cbTrabajadoraPropina);
         cbTrabajadoraPropina.setRenderer(new DefaultListCellRenderer() {
             @Override
             public Component getListCellRendererComponent(JList<?> list, Object value, int index, boolean isSelected, boolean cellHasFocus) {
